@@ -4,10 +4,10 @@ import { Header } from "@/components/refine-ui/layout/header";
 import { ThemeProvider } from "@/components/refine-ui/theme/theme-provider";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
-import type { PropsWithChildren } from "react";
+import { Outlet } from "react-router";
 import { Sidebar } from "./sidebar";
 
-export function Layout({ children }: PropsWithChildren) {
+export function Layout() {
   return (
     <ThemeProvider>
       <SidebarProvider>
@@ -31,7 +31,7 @@ export function Layout({ children }: PropsWithChildren) {
               "lg:pt-6"
             )}
           >
-            {children}
+            <Outlet />
           </main>
         </SidebarInset>
       </SidebarProvider>

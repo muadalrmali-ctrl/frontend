@@ -1,4 +1,4 @@
-import { GitHubBanner, Refine, WelcomePage } from "@refinedev/core";
+import { GitHubBanner, Refine } from "@refinedev/core";
 import { DevtoolsPanel, DevtoolsProvider } from "@refinedev/devtools";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
 
@@ -7,40 +7,126 @@ import routerProvider, {
   UnsavedChangesNotifier,
 } from "@refinedev/react-router";
 import { BrowserRouter, Route, Routes } from "react-router";
+import { Home, ClipboardList, Wrench, Package, Users, DollarSign, BarChart3, Calculator } from "lucide-react";
 import "./App.css";
 import { Toaster } from "./components/refine-ui/notification/toaster";
 import { useNotificationProvider } from "./components/refine-ui/notification/use-notification-provider";
-import { ThemeProvider } from "./components/refine-ui/theme/theme-provider";
 import { dataProvider } from "./providers/data";
+import { Layout } from "./components/refine-ui/layout/layout";
+import { DashboardPage } from "./pages/dashboard";
+import { CasesPage } from "./pages/cases/list";
+import { MaintenanceOperationsPage } from "./pages/maintenance-operations/list";
+import { InventoryPage } from "./pages/inventory/list";
+import { TeamPage } from "./pages/team/list";
+import { SalesPage } from "./pages/sales/list";
+import { ReportsPage } from "./pages/reports/list";
+import { AccountingPage } from "./pages/accounting/list";
 
 function App() {
   return (
     <BrowserRouter>
       <GitHubBanner />
       <RefineKbarProvider>
-        <ThemeProvider>
-          <DevtoolsProvider>
-            <Refine
-              dataProvider={dataProvider}
-              notificationProvider={useNotificationProvider()}
-              routerProvider={routerProvider}
-              options={{
-                syncWithLocation: true,
-                warnWhenUnsavedChanges: true,
-                projectId: "8VaUyH-oJVueN-Hv1pe3",
-              }}
-            >
-              <Routes>
-                <Route index element={<WelcomePage />} />
-              </Routes>
-              <Toaster />
-              <RefineKbar />
-              <UnsavedChangesNotifier />
-              <DocumentTitleHandler />
-            </Refine>
-            <DevtoolsPanel />
-          </DevtoolsProvider>
-        </ThemeProvider>
+        <DevtoolsProvider>
+          <Refine
+            dataProvider={dataProvider}
+            notificationProvider={useNotificationProvider()}
+            routerProvider={routerProvider}
+            resources={[
+              {
+                name: "dashboard",
+                list: "/",
+                meta: {
+                  label: "Dashboard",
+                  icon: <Home size={16} />,
+                },
+              },
+              {
+                name: "cases",
+                list: "/cases",
+                meta: {
+                  label: "Cases",
+                  icon: <ClipboardList size={16} />,
+                },
+              },
+              {
+                name: "maintenance-operations",
+                list: "/maintenance-operations",
+                meta: {
+                  label: "Maintenance Operations",
+                  icon: <Wrench size={16} />,
+                },
+              },
+              {
+                name: "inventory",
+                list: "/inventory",
+                meta: {
+                  label: "Inventory",
+                  icon: <Package size={16} />,
+                },
+              },
+              {
+                name: "team",
+                list: "/team",
+                meta: {
+                  label: "Team",
+                  icon: <Users size={16} />,
+                },
+              },
+              {
+                name: "sales",
+                list: "/sales",
+                meta: {
+                  label: "Sales",
+                  icon: <DollarSign size={16} />,
+                },
+              },
+              {
+                name: "reports",
+                list: "/reports",
+                meta: {
+                  label: "Reports",
+                  icon: <BarChart3 size={16} />,
+                },
+              },
+              {
+                name: "accounting",
+                list: "/accounting",
+                meta: {
+                  label: "Accounting",
+                  icon: <Calculator size={16} />,
+                },
+              },
+            ]}
+            options={{
+              syncWithLocation: true,
+              warnWhenUnsavedChanges: true,
+              projectId: "8VaUyH-oJVueN-Hv1pe3",
+            }}
+          >
+            <Routes>
+              <Route element={<Layout />}>
+                <Route index element={<DashboardPage />} />
+                <Route path="cases" element={<CasesPage />} />
+                <Route
+                  path="maintenance-operations"
+                  element={<MaintenanceOperationsPage />}
+                />
+                <Route path="inventory" element={<InventoryPage />} />
+                <Route path="team" element={<TeamPage />} />
+                <Route path="sales" element={<SalesPage />} />
+                <Route path="reports" element={<ReportsPage />} />
+                <Route path="accounting" element={<AccountingPage />} />
+              </Route>
+            </Routes>
+
+            <Toaster />
+            <RefineKbar />
+            <UnsavedChangesNotifier />
+            <DocumentTitleHandler />
+          </Refine>
+          <DevtoolsPanel />
+        </DevtoolsProvider>
       </RefineKbarProvider>
     </BrowserRouter>
   );

@@ -27,9 +27,24 @@ export class ApiError extends Error {
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
-const buildUrl = (path: string, query?: Record<string, unknown>) => {
-  const baseUrl = trimTrailingSlash(API_URL || "");
+const normalizeApiPath = (baseUrl: string, path: string) => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const basePath = new URL(baseUrl).pathname.replace(/\/+$/, "");
+
+  if (basePath.endsWith("/api") && normalizedPath.startsWith("/api/")) {
+    return normalizedPath.replace(/^\/api/, "");
+  }
+
+  return normalizedPath;
+};
+
+const buildUrl = (path: string, query?: Record<string, unknown>) => {
+  if (!API_URL) {
+    throw new ApiError("VITE_API_URL is not configured.", 0);
+  }
+
+  const baseUrl = trimTrailingSlash(API_URL || "");
+  const normalizedPath = normalizeApiPath(baseUrl, path);
   const url = new URL(`${baseUrl}${normalizedPath}`);
 
   if (query) {
@@ -63,11 +78,22 @@ export const apiClient = async <T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(buildUrl(path, options.query), {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
+  const requestUrl = buildUrl(path, options.query);
+  let response: Response;
+
+  try {
+    response = await fetch(requestUrl, {
+      method: options.method ?? "GET",
+      headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    });
+  } catch (error) {
+    throw new ApiError(
+      `Cannot reach API at ${requestUrl}. Check VITE_API_URL and CORS settings.`,
+      0,
+      error
+    );
+  }
 
   const text = await response.text();
   const payload = text ? JSON.parse(text) : null;

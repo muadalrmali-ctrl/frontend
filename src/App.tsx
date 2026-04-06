@@ -1,26 +1,30 @@
-import { GitHubBanner, Refine } from "@refinedev/core";
+import { Authenticated, GitHubBanner, Refine } from "@refinedev/core";
 import { DevtoolsPanel, DevtoolsProvider } from "@refinedev/devtools";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
 
 import routerProvider, {
   DocumentTitleHandler,
+  NavigateToResource,
   UnsavedChangesNotifier,
 } from "@refinedev/react-router";
 import { BrowserRouter, Route, Routes } from "react-router";
-import { Home, ClipboardList, Wrench, Package, Users, DollarSign, BarChart3, Calculator } from "lucide-react";
+import { Home, ClipboardList, Wrench, Package, Users, DollarSign, BarChart3, Calculator, UserRound } from "lucide-react";
 import "./App.css";
 import { Toaster } from "./components/refine-ui/notification/toaster";
 import { useNotificationProvider } from "./components/refine-ui/notification/use-notification-provider";
 import { dataProvider } from "./providers/data";
+import { authProvider } from "./providers/auth-provider";
 import { Layout } from "./components/refine-ui/layout/layout";
 import { DashboardPage } from "./pages/dashboard";
 import { CasesPage } from "./pages/cases/list";
+import { CustomersPage } from "./pages/customers/list";
 import { MaintenanceOperationsPage } from "./pages/maintenance-operations/list";
 import { InventoryPage } from "./pages/inventory/list";
 import { TeamPage } from "./pages/team/list";
 import { SalesPage } from "./pages/sales/list";
 import { ReportsPage } from "./pages/reports/list";
 import { AccountingPage } from "./pages/accounting/list";
+import { LoginPage } from "./pages/login";
 
 function App() {
   return (
@@ -29,6 +33,7 @@ function App() {
       <RefineKbarProvider>
         <DevtoolsProvider>
           <Refine
+            authProvider={authProvider}
             dataProvider={dataProvider}
             notificationProvider={useNotificationProvider()}
             routerProvider={routerProvider}
@@ -47,6 +52,14 @@ function App() {
                 meta: {
                   label: "Cases",
                   icon: <ClipboardList size={16} />,
+                },
+              },
+              {
+                name: "customers",
+                list: "/customers",
+                meta: {
+                  label: "Customers",
+                  icon: <UserRound size={16} />,
                 },
               },
               {
@@ -105,9 +118,24 @@ function App() {
             }}
           >
             <Routes>
-              <Route element={<Layout />}>
+              <Route
+                path="/login"
+                element={
+                  <Authenticated key="login" fallback={<LoginPage />}>
+                    <NavigateToResource resource="dashboard" />
+                  </Authenticated>
+                }
+              />
+              <Route
+                element={
+                  <Authenticated key="protected-routes" redirectOnFail="/login">
+                    <Layout />
+                  </Authenticated>
+                }
+              >
                 <Route index element={<DashboardPage />} />
                 <Route path="cases" element={<CasesPage />} />
+                <Route path="customers" element={<CustomersPage />} />
                 <Route
                   path="maintenance-operations"
                   element={<MaintenanceOperationsPage />}

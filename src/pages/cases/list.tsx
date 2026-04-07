@@ -79,9 +79,9 @@ const WORKFLOW_COLUMNS: WorkflowColumn[] = [
 
 const ALLOWED_BOARD_TRANSITIONS: Record<string, string[]> = {
   received: ["waiting_part", "diagnosing"],
-  waiting_part: ["diagnosing"],
-  diagnosing: ["waiting_part", "received", "in_progress", "waiting_approval"],
-  waiting_approval: ["in_progress"],
+  waiting_part: ["received", "diagnosing"],
+  diagnosing: ["waiting_part", "waiting_approval"],
+  waiting_approval: ["diagnosing"],
   in_progress: ["repaired"],
   repaired: [],
   not_repairable: [],

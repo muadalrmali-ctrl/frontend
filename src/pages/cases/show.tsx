@@ -13,6 +13,7 @@ import {
   Plus,
   RotateCcw,
   Send,
+  Trash2,
   Wrench,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +68,19 @@ type CaseData = {
   latestMessage?: string | null;
   latestMessageChannel?: string | null;
   latestMessageSentAt?: string | null;
+  postRepairCompletedWork?: string | null;
+  postRepairTested?: boolean;
+  postRepairTestCount?: number;
+  postRepairCleaned?: boolean;
+  postRepairRecommendations?: string | null;
+  postRepairImages?: string | null;
+  postRepairDamagedPartImages?: string | null;
+  postRepairNote?: string | null;
+  readyNotificationMessage?: string | null;
+  readyNotificationChannel?: string | null;
+  readyNotificationSentAt?: string | null;
+  customerReceivedAt?: string | null;
+  operationFinalizedAt?: string | null;
   assignedTechnicianId?: number | null;
   createdAt?: string | null;
 };
@@ -150,6 +164,65 @@ const formatDuration = (seconds: number) => {
   return `${days} يوم ${hours} ساعة ${minutes} دقيقة ${remainingSeconds} ثانية`;
 };
 
+const formatRemainingTime = (seconds: number) => {
+  if (seconds <= 0) return "انتهى الوقت";
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor((seconds % 86_400) / 3_600);
+  const minutes = Math.max(1, Math.floor((seconds % 3_600) / 60));
+
+  if (days > 0) return `باقي ${days} ${days === 1 ? "يوم" : "أيام"}`;
+  if (hours > 0) return `باقي ${hours} ساعات و ${minutes} دقيقة`;
+  return `باقي ${minutes} دقيقة`;
+};
+
+const getExecutionElapsedSeconds = (caseData: CaseData) => {
+  const startedAt = caseData.executionTimerStartedAt ? new Date(caseData.executionTimerStartedAt) : null;
+  const completedAt = caseData.executionCompletedAt ? new Date(caseData.executionCompletedAt) : null;
+  if (!startedAt || !completedAt) return 0;
+
+  const pausedSeconds = caseData.executionTotalPausedSeconds || 0;
+  return Math.max(0, Math.floor((completedAt.getTime() - startedAt.getTime()) / 1000) - pausedSeconds);
+};
+
+const getEstimatedExecutionSeconds = (caseData: CaseData) =>
+  ((caseData.executionDurationDays || 0) * 86_400) +
+  ((caseData.executionDurationHours || 0) * 3_600);
+
+const getPerformanceIndicator = (actualSeconds: number, estimatedSeconds: number) => {
+  if (!actualSeconds || !estimatedSeconds) return { label: "غير محدد", tone: "secondary" as const };
+  const delta = actualSeconds - estimatedSeconds;
+  const absDelta = Math.abs(delta);
+  const minutes = Math.ceil(absDelta / 60);
+  const days = Math.floor(absDelta / 86_400);
+
+  if (delta > 0) {
+    const delayText = days >= 1 ? `${days} يوم` : `${minutes} دقيقة`;
+    return { label: `متأخر ${delayText}`, tone: "destructive" as const };
+  }
+
+  if (actualSeconds <= estimatedSeconds * 0.65) {
+    return { label: "ممتاز", tone: "default" as const };
+  }
+
+  if (actualSeconds <= estimatedSeconds * 0.9) {
+    return { label: "جيد جدًا", tone: "default" as const };
+  }
+
+  return { label: "جيد", tone: "secondary" as const };
+};
+
+const parseImageList = (value?: string | null) => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+};
+
+const stringifyImageList = (images: string[]) => JSON.stringify(images);
+
 export function CaseDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -221,7 +294,7 @@ export function CaseDetailsPage() {
           {status === "diagnosing" && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "waiting_approval" && <WaitingApprovalSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "in_progress" && <ExecutionSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
-          {status === "repaired" && <RepairedSection details={details} parts={parts} services={services} />}
+          {status === "repaired" && <RepairedSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
         </>
       )}
     </section>
@@ -569,6 +642,7 @@ function ExecutionPreparationSection({ details, onSaved }: { details: CaseDetail
         body: {
           durationDays: Number(durationDays || 0),
           durationHours: Number(durationHours || 0),
+          customerApprovalConfirmed: true,
           assignedTechnicianId: technicianId ? Number(technicianId) : undefined,
           notes: "Execution prepared after customer approval",
         },
@@ -605,30 +679,33 @@ function ExecutionSection({ details, parts, services, onSaved }: { details: Case
   const [now, setNow] = useState(Date.now());
   const [isEditingInvoice, setIsEditingInvoice] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { invoiceTotal } = getInvoiceTotals(parts, services);
   const remainingSeconds = getRemainingExecutionSeconds(details.caseData, now);
   const isPaused = Boolean(details.caseData.executionTimerPausedAt);
-  const resendMessageText = details.caseData.latestMessage || buildDiagnosisMessage(details, invoiceTotal, "غير محدد", getDiagnosisText(details.caseData));
 
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
   }, []);
 
-  const pauseForApproval = async () => {
+  const pauseForApproval = async (notes = "Execution paused after editing started") => {
     setError(null);
     try {
       await apiClient(`/api/cases/${details.caseData.id}/execution/pause`, {
         method: "PATCH",
         body: {
-          latestMessage: resendMessageText,
           latestMessageChannel: details.caseData.latestMessageChannel || "WhatsApp",
-          notes: "Execution paused after resending updated details for approval",
+          notes,
         },
       });
       await onSaved();
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذر إيقاف المؤقت مؤقتا");
+    }
+  };
+  const openEditPanel = async () => {
+    setIsEditingInvoice(true);
+    if (!isPaused) {
+      await pauseForApproval("Execution paused for invoice/details edit");
     }
   };
   const resumeExecution = async () => {
@@ -666,35 +743,315 @@ function ExecutionSection({ details, parts, services, onSaved }: { details: Case
             <Info label="موعد التسليم المتوقع" value={formatDate(details.caseData.executionDueAt || details.caseData.deliveryDueAt)} />
             <Info label="مدة التنفيذ المخططة" value={`${details.caseData.executionDurationDays || 0} يوم / ${details.caseData.executionDurationHours || 0} ساعة`} />
             <Info label="حالة المؤقت" value={isPaused ? "متوقف بانتظار موافقة" : "يعمل"} />
-            <Info label="الوقت المتبقي للفني" value={formatDuration(remainingSeconds)} />
+            <Info label="الوقت المتبقي للفني" value={formatRemainingTime(remainingSeconds)} />
           </div>
           <InvoicePreview parts={parts} services={services} />
           <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="outline" onClick={() => setIsEditingInvoice((value) => !value)}>تعديل</Button>
-            <Button type="button" variant="outline" onClick={pauseForApproval} disabled={isPaused}><PauseCircle /> إعادة إرسال</Button>
+            <Button type="button" variant="outline" onClick={openEditPanel}>تعديل</Button>
+            <Button type="button" variant="outline" onClick={openEditPanel}><PauseCircle /> إعادة إرسال</Button>
             <Button type="button" variant="outline" onClick={resumeExecution} disabled={!isPaused}><PlayCircle /> تمت الموافقة</Button>
             <Button type="button" onClick={completeRepair}><CheckCircle2 /> تم الإصلاح</Button>
           </div>
         </CardContent>
       </Card>
-      {isEditingInvoice && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={onSaved} />}
+      {isEditingInvoice && <ExecutionEditSection details={details} parts={parts} services={services} onSaved={onSaved} />}
     </div>
   );
 }
 
-function RepairedSection({ details, parts, services }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[] }) {
+function ExecutionEditSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
+  const { result } = useList<InventoryItem>({ resource: "inventory" });
+  const inventoryItems = result.data ?? [];
+  const initialDate = details.caseData.executionDueAt?.slice(0, 10) || details.caseData.deliveryDueAt?.slice(0, 10) || addDays(1);
+  const [deliveryDate, setDeliveryDate] = useState(initialDate);
+  const [selectedPartId, setSelectedPartId] = useState("");
+  const [partQuantity, setPartQuantity] = useState("1");
+  const [serviceName, setServiceName] = useState("");
+  const [servicePrice, setServicePrice] = useState("");
+  const [channel, setChannel] = useState(details.caseData.latestMessageChannel || "WhatsApp");
+  const [messageText, setMessageText] = useState(details.caseData.latestMessage || "");
+  const [error, setError] = useState<string | null>(null);
+  const { invoiceTotal } = getInvoiceTotals(parts, services);
+
+  useEffect(() => {
+    if (!messageText) {
+      setMessageText(buildDiagnosisMessage(details, invoiceTotal, "حسب التحديث", getDiagnosisText(details.caseData)));
+    }
+  }, [details, invoiceTotal, messageText]);
+
+  const addPart = async () => {
+    if (!selectedPartId) return;
+    setError(null);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/parts`, {
+        method: "POST",
+        body: { inventoryItemId: Number(selectedPartId), quantity: Number(partQuantity || 1) },
+      });
+      setSelectedPartId("");
+      setPartQuantity("1");
+      await onSaved();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر إضافة القطعة");
+    }
+  };
+
+  const removePart = async (partId: number) => {
+    setError(null);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/parts/${partId}`, { method: "DELETE" });
+      await onSaved();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر حذف القطعة");
+    }
+  };
+
+  const addService = async () => {
+    if (!serviceName.trim() || !servicePrice) return;
+    setError(null);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/services`, {
+        method: "POST",
+        body: { serviceName, unitPrice: Number(servicePrice), quantity: 1 },
+      });
+      setServiceName("");
+      setServicePrice("");
+      await onSaved();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر إضافة الخدمة");
+    }
+  };
+
+  const removeService = async (serviceId: number) => {
+    setError(null);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/services/${serviceId}`, { method: "DELETE" });
+      await onSaved();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر حذف الخدمة");
+    }
+  };
+
+  const saveDeliveryAndSend = async () => {
+    setError(null);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}`, {
+        method: "PATCH",
+        body: {
+          deliveryDueAt: new Date(`${deliveryDate}T12:00:00`).toISOString(),
+          latestMessage: messageText,
+          latestMessageChannel: channel,
+          latestMessageSentAt: new Date().toISOString(),
+        },
+      });
+      await apiClient(`/api/cases/${details.caseData.id}/execution/pause`, {
+        method: "PATCH",
+        body: {
+          latestMessage: messageText,
+          latestMessageChannel: channel,
+          notes: "Execution details updated and sent to customer",
+        },
+      });
+      await onSaved();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر إرسال تحديث التنفيذ");
+    }
+  };
+
   return (
+    <Card className="rounded-lg border-primary/30">
+      <CardHeader><CardTitle>تعديل تفاصيل التنفيذ</CardTitle></CardHeader>
+      <CardContent className="grid gap-5">
+        {error && <ErrorMessage message={error} />}
+        <p className="text-sm text-muted-foreground">تم إيقاف مؤقت التنفيذ مؤقتًا أثناء التعديل. مدة التنفيذ الأصلية مقفلة ولا يمكن تغييرها.</p>
+        <Field label="موعد التسليم المتوقع">
+          <Input type="date" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} />
+        </Field>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader><CardTitle className="text-lg">إضافة قطعة</CardTitle></CardHeader>
+            <CardContent className="grid gap-3">
+              <Select value={selectedPartId} onValueChange={setSelectedPartId}>
+                <SelectTrigger><SelectValue placeholder="اختر قطعة" /></SelectTrigger>
+                <SelectContent>{inventoryItems.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name} - {item.code}</SelectItem>)}</SelectContent>
+              </Select>
+              <Input type="number" min="1" value={partQuantity} onChange={(event) => setPartQuantity(event.target.value)} />
+              <Button type="button" onClick={addPart}><Plus /> إضافة قطعة</Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="text-lg">إضافة خدمة</CardTitle></CardHeader>
+            <CardContent className="grid gap-3">
+              <Input value={serviceName} onChange={(event) => setServiceName(event.target.value)} placeholder="اسم الخدمة" />
+              <Input type="number" min="0" value={servicePrice} onChange={(event) => setServicePrice(event.target.value)} placeholder="السعر" />
+              <Button type="button" onClick={addService}><Plus /> إضافة خدمة</Button>
+            </CardContent>
+          </Card>
+        </div>
+        <EditableInvoicePreview parts={parts} services={services} onRemovePart={removePart} onRemoveService={removeService} />
+        <div className="grid gap-3 rounded-lg border p-4">
+          <h3 className="font-semibold">التواصل مع العميل</h3>
+          <div className="flex flex-wrap gap-3">
+            <Select value={channel} onValueChange={setChannel}>
+              <SelectTrigger className="w-full md:w-56"><SelectValue /></SelectTrigger>
+              <SelectContent>{channelLabels.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
+            </Select>
+            <Button type="button" onClick={saveDeliveryAndSend}><Send /> إرسال التحديث</Button>
+          </div>
+          <Textarea value={messageText} onChange={(event) => setMessageText(event.target.value)} className="min-h-36" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function RepairedSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
+  const navigate = useNavigate();
+  const actualSeconds = getExecutionElapsedSeconds(details.caseData);
+  const estimatedSeconds = getEstimatedExecutionSeconds(details.caseData);
+  const performance = getPerformanceIndicator(actualSeconds, estimatedSeconds);
+  const { invoiceTotal } = getInvoiceTotals(parts, services);
+  const [completedWork, setCompletedWork] = useState(details.caseData.postRepairCompletedWork || "");
+  const [tested, setTested] = useState(Boolean(details.caseData.postRepairTested));
+  const [testCount, setTestCount] = useState(String(details.caseData.postRepairTestCount || 1));
+  const [cleaned, setCleaned] = useState(Boolean(details.caseData.postRepairCleaned));
+  const [recommendations, setRecommendations] = useState(details.caseData.postRepairRecommendations || "");
+  const [repairImages, setRepairImages] = useState<string[]>(parseImageList(details.caseData.postRepairImages));
+  const [damagedPartImages, setDamagedPartImages] = useState<string[]>(parseImageList(details.caseData.postRepairDamagedPartImages));
+  const [note, setNote] = useState(details.caseData.postRepairNote || "");
+  const defaultReadyMessage = `السلام عليكم، جهازك جاهز للاستلام.\nرقم الحالة: ${details.caseData.caseCode}\nالإجمالي: ${formatMoney(invoiceTotal)}\n${completedWork ? `ملخص العمل: ${completedWork}` : ""}`;
+  const [readyMessage, setReadyMessage] = useState(details.caseData.readyNotificationMessage || defaultReadyMessage);
+  const [readyChannel, setReadyChannel] = useState(details.caseData.readyNotificationChannel || "WhatsApp");
+  const [error, setError] = useState<string | null>(null);
+
+  const uploadImages = (event: ChangeEvent<HTMLInputElement>, setter: (images: string[]) => void, current: string[]) => {
+    const files = Array.from(event.target.files ?? []).slice(0, 4 - current.length);
+    if (files.length === 0) return;
+
+    Promise.all(files.map((file) => new Promise<string>((resolve, reject) => {
+      if (file.size > MAX_INLINE_IMAGE_BYTES) {
+        reject(new Error("إحدى الصور كبيرة. استخدم صورا أصغر حتى يتم ربط التخزين الخارجي."));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("تعذر قراءة الصورة من الجهاز."));
+      reader.readAsDataURL(file);
+    })))
+      .then((images) => {
+        setter([...current, ...images].slice(0, 4));
+        setError(null);
+      })
+      .catch((error) => setError(error instanceof Error ? error.message : "تعذر رفع الصور"));
+  };
+
+  const saveQuality = async () => {
+    setError(null);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/repair-quality`, {
+        method: "PATCH",
+        body: {
+          postRepairCompletedWork: completedWork,
+          postRepairTested: tested,
+          postRepairTestCount: Number(testCount || 1),
+          postRepairCleaned: cleaned,
+          postRepairRecommendations: recommendations,
+          postRepairImages: stringifyImageList(repairImages),
+          postRepairDamagedPartImages: stringifyImageList(damagedPartImages),
+          postRepairNote: note,
+        },
+      });
+      await onSaved();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر حفظ فحص الجودة");
+    }
+  };
+
+  const sendReadyNotification = async () => {
+    setError(null);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/ready-notification`, {
+        method: "PATCH",
+        body: {
+          readyNotificationMessage: readyMessage,
+          readyNotificationChannel: readyChannel,
+        },
+      });
+      await onSaved();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر حفظ إشعار الجاهزية");
+    }
+  };
+
+  const markReceived = async () => {
+    setError(null);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/customer-received`, { method: "PATCH" });
+      await onSaved();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر تسجيل الاستلام");
+    }
+  };
+
+  const finalizeOperation = async () => {
+    setError(null);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/finalize`, { method: "PATCH" });
+      await onSaved();
+      navigate("/maintenance-operations");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر إنهاء العملية");
+    }
+  };
+
+  return (
+    <div className="grid gap-6">
     <Card className="rounded-lg">
       <CardHeader><CardTitle>ملخص الإصلاح</CardTitle></CardHeader>
       <CardContent className="grid gap-5">
+        {error && <ErrorMessage message={error} />}
         <div className="grid gap-3 md:grid-cols-3">
-          <Info label="بدأ التنفيذ" value={formatDate(details.caseData.executionTimerStartedAt)} />
-          <Info label="انتهى التنفيذ" value={formatDate(details.caseData.executionCompletedAt)} />
-          <Info label="مدة التنفيذ المخططة" value={`${details.caseData.executionDurationDays || 0} يوم / ${details.caseData.executionDurationHours || 0} ساعة`} />
+          <Info label="وقت التنفيذ الفعلي" value={formatDuration(actualSeconds)} />
+          <Info label="مدة التنفيذ المقدرة" value={`${details.caseData.executionDurationDays || 0} يوم / ${details.caseData.executionDurationHours || 0} ساعة`} />
+          <div className="rounded-lg border bg-muted/20 p-3">
+            <p className="text-xs text-muted-foreground">مؤشر المتابعة</p>
+            <Badge variant={performance.tone} className="mt-2">{performance.label}</Badge>
+          </div>
         </div>
         <InvoicePreview parts={parts} services={services} />
       </CardContent>
     </Card>
+    <Card className="rounded-lg">
+      <CardHeader><CardTitle>فحص ما بعد الإصلاح والجودة</CardTitle></CardHeader>
+      <CardContent className="grid gap-4">
+        <Field label="ما الذي تم إصلاحه؟"><Textarea value={completedWork} onChange={(event) => setCompletedWork(event.target.value)} className="min-h-28" /></Field>
+        <label className="flex items-center gap-2 rounded-lg border p-3"><input type="checkbox" checked={tested} onChange={(event) => setTested(event.target.checked)} /> تم اختبار الجهاز بعد الإصلاح</label>
+        <Field label="عدد مرات الاختبار"><Input type="number" min="1" value={testCount} onChange={(event) => setTestCount(event.target.value)} /></Field>
+        <label className="flex items-center gap-2 rounded-lg border p-3"><input type="checkbox" checked={cleaned} onChange={(event) => setCleaned(event.target.checked)} /> تم تنظيف الجهاز</label>
+        <Field label="نصائح فنية للعميل"><Textarea value={recommendations} onChange={(event) => setRecommendations(event.target.value)} /></Field>
+        <ImageUploadGrid label="صور الجهاز بعد الإصلاح" images={repairImages} onUpload={(event) => uploadImages(event, setRepairImages, repairImages)} />
+        <ImageUploadGrid label="القطعة المعطوبة" images={damagedPartImages} onUpload={(event) => uploadImages(event, setDamagedPartImages, damagedPartImages)} />
+        <Field label="ملاحظة"><Textarea value={note} onChange={(event) => setNote(event.target.value)} /></Field>
+        <Button type="button" className="w-fit" onClick={saveQuality}>حفظ فحص الجودة</Button>
+      </CardContent>
+    </Card>
+    <Card className="rounded-lg">
+      <CardHeader><CardTitle>إشعار الجاهزية للعميل</CardTitle></CardHeader>
+      <CardContent className="grid gap-4">
+        <InvoicePreview parts={parts} services={services} />
+        <p className="text-sm text-muted-foreground">صور ما بعد الإصلاح والقطعة المعطوبة محفوظة مع الحالة ويمكن ربطها كمرفقات عند تفعيل تكامل WhatsApp/SMS لاحقا.</p>
+        <div className="flex flex-wrap gap-3">
+          <Select value={readyChannel} onValueChange={setReadyChannel}>
+            <SelectTrigger className="w-full md:w-56"><SelectValue /></SelectTrigger>
+            <SelectContent>{channelLabels.filter((item) => item !== "other").map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
+          </Select>
+          <Button type="button" onClick={sendReadyNotification}><Send /> إرسال إشعار الجاهزية</Button>
+          <Button type="button" variant="outline" onClick={markReceived} disabled={!details.caseData.readyNotificationSentAt}>تم الاستلام</Button>
+          <Button type="button" onClick={finalizeOperation} disabled={!details.caseData.customerReceivedAt}>إنهاء العملية</Button>
+        </div>
+        <Textarea value={readyMessage} onChange={(event) => setReadyMessage(event.target.value)} className="min-h-36" />
+      </CardContent>
+    </Card>
+    </div>
   );
 }
 
@@ -729,6 +1086,82 @@ function InvoicePreview({ parts, services }: { parts: CasePart[]; services: Case
         <Info label="إجمالي القطع" value={formatMoney(partsTotal)} />
         <Info label="إجمالي الخدمات" value={formatMoney(servicesTotal)} />
         <Info label="الإجمالي التقديري" value={formatMoney(invoiceTotal)} />
+      </div>
+    </div>
+  );
+}
+
+function EditableInvoicePreview({
+  parts,
+  services,
+  onRemovePart,
+  onRemoveService,
+}: {
+  parts: CasePart[];
+  services: CaseService[];
+  onRemovePart: (id: number) => void;
+  onRemoveService: (id: number) => void;
+}) {
+  const { partsTotal, servicesTotal, invoiceTotal } = getInvoiceTotals(parts, services);
+  return (
+    <div className="grid gap-4 rounded-lg border p-4">
+      <h3 className="text-lg font-semibold">الفاتورة القابلة للتعديل</h3>
+      <div className="grid gap-2">
+        {parts.map((part) => (
+          <div key={part.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+            <div>
+              <p className="font-medium">{part.inventoryName || "قطعة"}</p>
+              <p className="text-sm text-muted-foreground">{part.inventoryCode || "-"} · {part.quantity} · {formatMoney(toNumber(part.totalPrice))}</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => onRemovePart(part.id)}>
+              <Trash2 className="size-4" />
+              حذف
+            </Button>
+          </div>
+        ))}
+        {services.map((service) => (
+          <div key={service.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+            <div>
+              <p className="font-medium">{service.serviceName}</p>
+              <p className="text-sm text-muted-foreground">{formatMoney(toNumber(service.totalPrice))}</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => onRemoveService(service.id)}>
+              <Trash2 className="size-4" />
+              حذف
+            </Button>
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <Info label="إجمالي القطع" value={formatMoney(partsTotal)} />
+        <Info label="إجمالي الخدمات" value={formatMoney(servicesTotal)} />
+        <Info label="الإجمالي" value={formatMoney(invoiceTotal)} />
+      </div>
+    </div>
+  );
+}
+
+function ImageUploadGrid({
+  label,
+  images,
+  onUpload,
+}: {
+  label: string;
+  images: string[];
+  onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <div className="grid gap-3 rounded-lg border p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Label>{label}</Label>
+        <Input className="max-w-sm" type="file" accept="image/*" multiple onChange={onUpload} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {images.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">لا توجد صور مرفوعة بعد</p>
+        ) : (
+          images.map((image, index) => <ImageBox key={`${label}-${index}`} imageUrl={image} label={`${label} ${index + 1}`} />)
+        )}
       </div>
     </div>
   );

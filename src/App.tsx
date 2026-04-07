@@ -17,6 +17,7 @@ import { authProvider } from "./providers/auth-provider";
 import { Layout } from "./components/refine-ui/layout/layout";
 import { DashboardPage } from "./pages/dashboard";
 import { CasesPage } from "./pages/cases/list";
+import { CreateCasePage } from "./pages/cases/create";
 import { CustomersPage } from "./pages/customers/list";
 import { MaintenanceOperationsPage } from "./pages/maintenance-operations/list";
 import { InventoryPage } from "./pages/inventory/list";
@@ -49,17 +50,10 @@ function App() {
               {
                 name: "cases",
                 list: "/cases",
+                create: "/cases/create",
                 meta: {
                   label: "Cases",
                   icon: <ClipboardList size={16} />,
-                },
-              },
-              {
-                name: "customers",
-                list: "/customers",
-                meta: {
-                  label: "Customers",
-                  icon: <UserRound size={16} />,
                 },
               },
               {
@@ -76,14 +70,6 @@ function App() {
                 meta: {
                   label: "Inventory",
                   icon: <Package size={16} />,
-                },
-              },
-              {
-                name: "team",
-                list: "/team",
-                meta: {
-                  label: "Team",
-                  icon: <Users size={16} />,
                 },
               },
               {
@@ -108,6 +94,24 @@ function App() {
                 meta: {
                   label: "Accounting",
                   icon: <Calculator size={16} />,
+                },
+              },
+              {
+                name: "accounting-customers",
+                list: "/accounting/customers",
+                meta: {
+                  label: "Customers",
+                  icon: <UserRound size={16} />,
+                  parent: "accounting",
+                },
+              },
+              {
+                name: "accounting-team",
+                list: "/accounting/team",
+                meta: {
+                  label: "Team",
+                  icon: <Users size={16} />,
+                  parent: "accounting",
                 },
               },
             ]}
@@ -135,16 +139,17 @@ function App() {
               >
                 <Route index element={<DashboardPage />} />
                 <Route path="cases" element={<CasesPage />} />
-                <Route path="customers" element={<CustomersPage />} />
+                <Route path="cases/create" element={<CreateCasePage />} />
                 <Route
                   path="maintenance-operations"
                   element={<MaintenanceOperationsPage />}
                 />
                 <Route path="inventory" element={<InventoryPage />} />
-                <Route path="team" element={<TeamPage />} />
                 <Route path="sales" element={<SalesPage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="accounting" element={<AccountingPage />} />
+                <Route path="accounting/customers" element={<CustomersPage />} />
+                <Route path="accounting/team" element={<TeamPage />} />
               </Route>
             </Routes>
 

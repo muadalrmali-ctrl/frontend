@@ -27,9 +27,17 @@ export class ApiError extends Error {
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
 
+const isAbsoluteUrl = (value: string) => /^https?:\/\//i.test(value);
+
+const getBaseUrl = () => {
+  return API_URL;
+};
+
 const normalizeApiPath = (baseUrl: string, path: string) => {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const basePath = new URL(baseUrl).pathname.replace(/\/+$/, "");
+  const basePath = isAbsoluteUrl(baseUrl)
+    ? new URL(baseUrl).pathname.replace(/\/+$/, "")
+    : baseUrl.replace(/\/+$/, "");
 
   if (basePath.endsWith("/api") && normalizedPath.startsWith("/api/")) {
     return normalizedPath.replace(/^\/api/, "");
@@ -39,13 +47,18 @@ const normalizeApiPath = (baseUrl: string, path: string) => {
 };
 
 const buildUrl = (path: string, query?: Record<string, unknown>) => {
-  if (!API_URL) {
+  const configuredBaseUrl = getBaseUrl();
+
+  if (!configuredBaseUrl) {
     throw new ApiError("VITE_API_URL is not configured.", 0);
   }
 
-  const baseUrl = trimTrailingSlash(API_URL || "");
+  const baseUrl = trimTrailingSlash(configuredBaseUrl);
   const normalizedPath = normalizeApiPath(baseUrl, path);
-  const url = new URL(`${baseUrl}${normalizedPath}`);
+  const url = new URL(
+    `${baseUrl}${normalizedPath}`,
+    window.location.origin
+  );
 
   if (query) {
     Object.entries(query).forEach(([key, value]) => {
@@ -96,7 +109,19 @@ export const apiClient = async <T>(
   }
 
   const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
+  let payload: BackendResponse<T> | null = null;
+
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch (error) {
+      throw new ApiError(
+        `API returned a non-JSON response from ${requestUrl}. The route may be missing or the frontend may be hitting the SPA fallback.`,
+        response.status,
+        text
+      );
+    }
+  }
 
   if (response.status === 401 || response.status === 403) {
     clearStoredAuth();

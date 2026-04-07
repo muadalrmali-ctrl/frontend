@@ -24,11 +24,29 @@ const endpoints: Record<string, ResourceEndpoint> = {
   cases: {
     list: "/api/cases",
     show: (id) => `/api/cases/${id}`,
+    create: "/api/cases",
     update: (id) => `/api/cases/${id}`,
   },
   customers: {
     list: "/api/customers",
     show: (id) => `/api/customers/${id}`,
+    create: "/api/customers",
+  },
+  "accounting-customers": {
+    list: "/api/customers",
+    show: (id) => `/api/customers/${id}`,
+    create: "/api/customers",
+  },
+  devices: {
+    list: "/api/devices",
+    show: (id) => `/api/devices/${id}`,
+    create: "/api/devices",
+  },
+  technicians: {
+    list: "/api/auth/technicians",
+  },
+  "accounting-team": {
+    list: "/api/auth/technicians",
   },
   inventory: {
     list: "/api/inventory/items",

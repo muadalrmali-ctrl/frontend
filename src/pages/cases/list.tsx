@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useList } from "@refinedev/core";
+import { DragEvent, useMemo, useState } from "react";
+import { useList, useUpdate } from "@refinedev/core";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
@@ -18,12 +18,8 @@ type CaseRecord = {
   status: string;
   customerComplaint: string;
   priority?: string | null;
-  maintenanceTeam?: string | null;
   technicianName?: string | null;
-  serialNumber?: string | null;
-  createdAt?: string | null;
   customerName?: string | null;
-  customerPhone?: string | null;
   deviceApplianceType?: string | null;
   deviceBrand?: string | null;
   deviceModelName?: string | null;
@@ -33,6 +29,7 @@ type WorkflowColumn = {
   key: string;
   label: string;
   statuses: string[];
+  targetStatus: string;
 };
 
 const WORKFLOW_COLUMNS: WorkflowColumn[] = [
@@ -40,47 +37,77 @@ const WORKFLOW_COLUMNS: WorkflowColumn[] = [
     key: "received",
     label: "حالة جديدة",
     statuses: ["received", "new"],
+    targetStatus: "received",
   },
   {
-    key: "waiting",
-    label: "بانتظار",
-    statuses: ["waiting", "pending", "waiting_approval"],
+    key: "waiting_part",
+    label: "بانتظار القطعة",
+    statuses: ["waiting_part", "waiting_parts", "waiting", "pending"],
+    targetStatus: "waiting_part",
   },
   {
     key: "diagnosing",
     label: "قيد التشخيص",
     statuses: ["diagnosing", "under_diagnosis", "under diagnosis"],
+    targetStatus: "diagnosing",
+  },
+  {
+    key: "waiting_approval",
+    label: "بانتظار الموافقة",
+    statuses: ["waiting_approval"],
+    targetStatus: "waiting_approval",
   },
   {
     key: "in_progress",
     label: "قيد التنفيذ",
     statuses: ["in_progress", "in progress"],
+    targetStatus: "in_progress",
   },
   {
     key: "repaired",
     label: "تم الإصلاح",
     statuses: ["repaired", "completed", "delivered"],
+    targetStatus: "repaired",
   },
   {
     key: "not_repairable",
     label: "لا يمكن إصلاحها",
     statuses: ["not_repairable", "not repairable"],
+    targetStatus: "not_repairable",
   },
 ];
 
+const ALLOWED_BOARD_TRANSITIONS: Record<string, string[]> = {
+  received: ["waiting_part", "diagnosing"],
+  waiting_part: ["diagnosing"],
+  diagnosing: ["waiting_part", "received", "in_progress", "waiting_approval"],
+  waiting_approval: ["in_progress"],
+  in_progress: ["repaired"],
+  repaired: [],
+  not_repairable: [],
+};
+
 const normalizeStatus = (status: string) => status.trim().toLowerCase();
 
+const getWorkflowStatus = (status: string) => {
+  const normalizedStatus = normalizeStatus(status);
+  return (
+    WORKFLOW_COLUMNS.find((column) =>
+      column.statuses.includes(normalizedStatus)
+    )?.targetStatus ?? normalizedStatus
+  );
+};
+
 const getDeviceName = (caseItem: CaseRecord) =>
-  [
-    caseItem.deviceBrand,
-    caseItem.deviceApplianceType,
-    caseItem.deviceModelName,
-  ]
+  [caseItem.deviceBrand, caseItem.deviceApplianceType, caseItem.deviceModelName]
     .filter(Boolean)
     .join(" ") || "-";
 
 export function CasesPage() {
   const [collapsedColumns, setCollapsedColumns] = useState<string[]>([]);
+  const [draggedCase, setDraggedCase] = useState<CaseRecord | null>(null);
+  const [transitionError, setTransitionError] = useState<string | null>(null);
+  const { mutateAsync: updateStatus, mutation } = useUpdate();
   const { result, query } = useList<CaseRecord>({
     resource: "cases",
   });
@@ -103,13 +130,48 @@ export function CasesPage() {
     );
   };
 
+  const moveCase = async (caseItem: CaseRecord, toStatus: string) => {
+    const fromStatus = getWorkflowStatus(caseItem.status);
+    setTransitionError(null);
+
+    if (fromStatus === toStatus) return;
+
+    if (!ALLOWED_BOARD_TRANSITIONS[fromStatus]?.includes(toStatus)) {
+      setTransitionError("هذه الحركة غير مسموحة في سير العمل.");
+      return;
+    }
+
+    try {
+      await updateStatus({
+        resource: "case-status",
+        id: caseItem.id,
+        values: { toStatus },
+      });
+      await query.refetch();
+    } catch (error) {
+      setTransitionError(
+        error instanceof Error ? error.message : "تعذر تغيير حالة الحالة"
+      );
+    }
+  };
+
+  const handleDrop = async (
+    event: DragEvent<HTMLElement>,
+    column: WorkflowColumn
+  ) => {
+    event.preventDefault();
+    if (!draggedCase || mutation.isPending) return;
+    await moveCase(draggedCase, column.targetStatus);
+    setDraggedCase(null);
+  };
+
   return (
-    <section className="space-y-6">
+    <section className="space-y-6" dir="rtl">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold">Cases</h1>
+          <h1 className="text-3xl font-semibold">الحالات</h1>
           <p className="text-muted-foreground">
-            Track each case across the maintenance workflow.
+            تابع كل حالة عبر مراحل الصيانة واسحب البطاقات بين الأعمدة المسموحة.
           </p>
         </div>
         <Button size="lg" className="w-full sm:w-auto" asChild>
@@ -120,8 +182,13 @@ export function CasesPage() {
         </Button>
       </div>
 
+      {transitionError && (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {transitionError}
+        </p>
+      )}
       {query.isLoading && (
-        <p className="text-muted-foreground">Loading cases...</p>
+        <p className="text-muted-foreground">جاري تحميل الحالات...</p>
       )}
       {query.error && (
         <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -133,26 +200,29 @@ export function CasesPage() {
           <CardHeader className="border-b">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <CardTitle className="text-xl">Workflow board</CardTitle>
+                <CardTitle className="text-xl">لوحة سير العمل</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Board lanes follow the Arabic workflow from right to left.
+                  الحركات الخلفية من قيد التنفيذ إلى المراحل السابقة غير مسموحة.
                 </p>
               </div>
               <Badge variant="outline" className="w-fit">
-                {cases.length} total
+                {cases.length} حالة
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <div className="flex min-h-[560px] min-w-max flex-row-reverse gap-4 p-4 md:p-5">
+              <div className="flex min-h-[560px] min-w-max flex-row gap-4 p-4 md:p-5">
                 {groupedCases.map((column) => (
                   <WorkflowLane
                     key={column.key}
-                    label={column.label}
-                    cases={column.cases}
+                    column={column}
                     isCollapsed={collapsedColumns.includes(column.key)}
+                    draggedCase={draggedCase}
                     onToggle={() => toggleColumn(column.key)}
+                    onDragStart={(caseItem) => setDraggedCase(caseItem)}
+                    onDragEnd={() => setDraggedCase(null)}
+                    onDrop={(event) => handleDrop(event, column)}
                   />
                 ))}
               </div>
@@ -165,23 +235,40 @@ export function CasesPage() {
 }
 
 function WorkflowLane({
-  label,
-  cases,
+  column,
+  draggedCase,
   isCollapsed,
   onToggle,
+  onDragStart,
+  onDragEnd,
+  onDrop,
 }: {
-  label: string;
-  cases: CaseRecord[];
+  column: WorkflowColumn & { cases: CaseRecord[] };
+  draggedCase: CaseRecord | null;
   isCollapsed: boolean;
   onToggle: () => void;
+  onDragStart: (caseItem: CaseRecord) => void;
+  onDragEnd: () => void;
+  onDrop: (event: DragEvent<HTMLElement>) => void;
 }) {
+  const canDrop =
+    draggedCase &&
+    ALLOWED_BOARD_TRANSITIONS[getWorkflowStatus(draggedCase.status)]?.includes(
+      column.targetStatus
+    );
+
   return (
     <section
+      onDragOver={(event) => {
+        if (canDrop) event.preventDefault();
+      }}
+      onDrop={onDrop}
       className={cn(
         "flex shrink-0 flex-col overflow-hidden rounded-lg border bg-muted/20 shadow-sm transition-[width,background-color,border-color] duration-300",
         isCollapsed
           ? "w-16 border-dashed bg-muted/35"
-          : "w-[300px] border-border bg-background"
+          : "w-[300px] border-border bg-background",
+        canDrop && "border-primary bg-primary/5"
       )}
     >
       <div
@@ -189,13 +276,12 @@ function WorkflowLane({
           "flex items-center gap-3 border-b p-3",
           isCollapsed ? "justify-center" : "justify-between"
         )}
-        dir="rtl"
       >
         {!isCollapsed && (
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold">{label}</h2>
+            <h2 className="truncate text-base font-semibold">{column.label}</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              {cases.length} حالة
+              {column.cases.length} حالة
             </p>
           </div>
         )}
@@ -204,7 +290,7 @@ function WorkflowLane({
           variant="ghost"
           size="icon"
           onClick={onToggle}
-          aria-label={isCollapsed ? `توسيع ${label}` : `تصغير ${label}`}
+          aria-label={isCollapsed ? `توسيع ${column.label}` : `تصغير ${column.label}`}
           className="rounded-full"
         >
           {isCollapsed ? <ChevronLeft /> : <ChevronRight />}
@@ -214,24 +300,26 @@ function WorkflowLane({
       {isCollapsed ? (
         <div className="flex flex-1 flex-col items-center gap-4 px-2 py-4">
           <Badge variant="secondary" className="rounded-full">
-            {cases.length}
+            {column.cases.length}
           </Badge>
-          <span
-            className="text-sm font-semibold text-foreground [text-orientation:mixed] [writing-mode:vertical-rl]"
-            dir="rtl"
-          >
-            {label}
+          <span className="text-sm font-semibold text-foreground [text-orientation:mixed] [writing-mode:vertical-rl]">
+            {column.label}
           </span>
         </div>
       ) : (
         <div className="flex flex-1 flex-col gap-3 p-3">
-          {cases.length === 0 ? (
+          {column.cases.length === 0 ? (
             <div className="flex min-h-28 items-center justify-center rounded-lg border border-dashed bg-muted/20 px-4 text-center text-sm text-muted-foreground">
               لا توجد حالات
             </div>
           ) : (
-            cases.map((caseItem) => (
-              <CaseCard key={caseItem.id} caseItem={caseItem} />
+            column.cases.map((caseItem) => (
+              <CaseCard
+                key={caseItem.id}
+                caseItem={caseItem}
+                onDragStart={() => onDragStart(caseItem)}
+                onDragEnd={onDragEnd}
+              />
             ))
           )}
         </div>
@@ -240,20 +328,34 @@ function WorkflowLane({
   );
 }
 
-function CaseCard({ caseItem }: { caseItem: CaseRecord }) {
+function CaseCard({
+  caseItem,
+  onDragStart,
+  onDragEnd,
+}: {
+  caseItem: CaseRecord;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+}) {
   return (
-    <article className="rounded-lg border bg-card p-4 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md">
+    <Link
+      to={`/cases/${caseItem.id}`}
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className="block rounded-lg border bg-card p-4 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-primary">{caseItem.caseCode}</p>
-          <h3 className="mt-1 truncate font-semibold" dir="rtl">
+          <h3 className="mt-1 truncate font-semibold">
             {caseItem.customerName ?? "عميل غير محدد"}
           </h3>
         </div>
         <Badge variant="secondary">{caseItem.priority ?? "متوسطة"}</Badge>
       </div>
 
-      <div className="mt-3 space-y-2 text-sm text-muted-foreground" dir="rtl">
+      <div className="mt-3 space-y-2 text-sm text-muted-foreground">
         <p>
           <span className="font-medium text-foreground">الجهاز: </span>
           {getDeviceName(caseItem)}
@@ -267,6 +369,6 @@ function CaseCard({ caseItem }: { caseItem: CaseRecord }) {
           {caseItem.technicianName || "غير معين"}
         </p>
       </div>
-    </article>
+    </Link>
   );
 }

@@ -27,6 +27,9 @@ const endpoints: Record<string, ResourceEndpoint> = {
     create: "/api/cases",
     update: (id) => `/api/cases/${id}`,
   },
+  "case-status": {
+    update: (id) => `/api/cases/${id}/status`,
+  },
   customers: {
     list: "/api/customers",
     show: (id) => `/api/customers/${id}`,

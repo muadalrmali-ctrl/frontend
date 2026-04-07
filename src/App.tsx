@@ -18,6 +18,7 @@ import { Layout } from "./components/refine-ui/layout/layout";
 import { DashboardPage } from "./pages/dashboard";
 import { CasesPage } from "./pages/cases/list";
 import { CreateCasePage } from "./pages/cases/create";
+import { CaseDetailsPage } from "./pages/cases/show";
 import { CustomersPage } from "./pages/customers/list";
 import { MaintenanceOperationsPage } from "./pages/maintenance-operations/list";
 import { InventoryPage } from "./pages/inventory/list";
@@ -52,6 +53,7 @@ function App() {
                 name: "cases",
                 list: "/cases",
                 create: "/cases/create",
+                show: "/cases/:id",
                 meta: {
                   label: "Cases",
                   icon: <ClipboardList size={16} />,
@@ -142,6 +144,7 @@ function App() {
                 <Route index element={<DashboardPage />} />
                 <Route path="cases" element={<CasesPage />} />
                 <Route path="cases/create" element={<CreateCasePage />} />
+                <Route path="cases/:id" element={<CaseDetailsPage />} />
                 <Route
                   path="maintenance-operations"
                   element={<MaintenanceOperationsPage />}

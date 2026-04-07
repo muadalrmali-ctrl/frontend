@@ -1020,27 +1020,16 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
       .catch((error) => setError(error instanceof Error ? error.message : "تعذر رفع الصور"));
   };
 
-  const saveQuality = async () => {
-    setError(null);
-    try {
-      await apiClient(`/api/cases/${details.caseData.id}/repair-quality`, {
-        method: "PATCH",
-        body: {
-          postRepairCompletedWork: completedWork,
-          postRepairTested: tested,
-          postRepairTestCount: Number(testCount || 1),
-          postRepairCleaned: cleaned,
-          postRepairRecommendations: recommendations,
-          postRepairImages: stringifyImageList(repairImages),
-          postRepairDamagedPartImages: stringifyImageList(damagedPartImages),
-          postRepairNote: note,
-        },
-      });
-      await onSaved();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "تعذر حفظ فحص الجودة");
-    }
-  };
+  const buildQualityPayload = () => ({
+    postRepairCompletedWork: completedWork,
+    postRepairTested: tested,
+    postRepairTestCount: Number(testCount || 1),
+    postRepairCleaned: cleaned,
+    postRepairRecommendations: recommendations,
+    postRepairImages: stringifyImageList(repairImages),
+    postRepairDamagedPartImages: stringifyImageList(damagedPartImages),
+    postRepairNote: note,
+  });
 
   const sendReadyNotification = async () => {
     setError(null);
@@ -1071,7 +1060,10 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
   const finalizeOperation = async () => {
     setError(null);
     try {
-      await apiClient(`/api/cases/${details.caseData.id}/finalize`, { method: "PATCH" });
+      await apiClient(`/api/cases/${details.caseData.id}/finalize`, {
+        method: "PATCH",
+        body: buildQualityPayload(),
+      });
       await onSaved();
       navigate("/maintenance-operations");
     } catch (error) {
@@ -1107,7 +1099,6 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         <ImageUploadGrid label="صور الجهاز بعد الإصلاح" images={repairImages} onUpload={(event) => uploadImages(event, setRepairImages, repairImages)} />
         <ImageUploadGrid label="القطعة المعطوبة" images={damagedPartImages} onUpload={(event) => uploadImages(event, setDamagedPartImages, damagedPartImages)} />
         <Field label="ملاحظة"><Textarea value={note} onChange={(event) => setNote(event.target.value)} /></Field>
-        <Button type="button" className="w-fit" onClick={saveQuality}>حفظ فحص الجودة</Button>
       </CardContent>
     </Card>
     <Card className="rounded-lg">

@@ -22,15 +22,27 @@ type Invoice = {
   createdAt?: string | null;
 };
 
+type InventoryItem = {
+  id: number;
+  name: string;
+  code: string;
+  quantity: number;
+  sellingPrice?: string | null;
+  unitCost?: string | null;
+};
+
 const formatMoney = (value?: string | null) => `${Number(value || 0).toLocaleString("ar-LY")} د.ل`;
 
 export function SalesPage() {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ customer: "", phone: "", item: "", quantity: "1", price: "", notes: "" });
+  const [form, setForm] = useState({ customer: "", phone: "", inventoryItemId: "", quantity: "1", price: "", notes: "" });
   const [error, setError] = useState<string | null>(null);
   const { result, query } = useList<Invoice>({ resource: "invoices" });
+  const { result: inventoryResult, query: inventoryQuery } = useList<InventoryItem>({ resource: "inventory" });
   const invoices = result.data ?? [];
+  const inventoryItems = inventoryResult.data ?? [];
+  const selectedInventoryItem = inventoryItems.find((item) => String(item.id) === form.inventoryItemId);
 
   const filteredInvoices = useMemo(() => {
     const value = search.trim().toLowerCase();
@@ -44,6 +56,11 @@ export function SalesPage() {
   const createInvoice = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    if (!selectedInventoryItem) {
+      setError("اختر قطعة من المخزون أولا.");
+      return;
+    }
+
     try {
       await apiClient("/api/invoices", {
         method: "POST",
@@ -51,10 +68,14 @@ export function SalesPage() {
           directCustomerName: form.customer,
           directCustomerPhone: form.phone,
           notes: form.notes,
-          items: [{ name: form.item, quantity: Number(form.quantity || 1), unitPrice: Number(form.price || 0) }],
+          items: [{
+            referenceId: selectedInventoryItem.id,
+            quantity: Number(form.quantity || 1),
+            unitPrice: Number(form.price || selectedInventoryItem.sellingPrice || selectedInventoryItem.unitCost || 0),
+          }],
         },
       });
-      setForm({ customer: "", phone: "", item: "", quantity: "1", price: "", notes: "" });
+      setForm({ customer: "", phone: "", inventoryItemId: "", quantity: "1", price: "", notes: "" });
       setShowCreate(false);
       await query.refetch();
     } catch (error) {
@@ -80,7 +101,28 @@ export function SalesPage() {
             <form className="grid gap-4 md:grid-cols-2" onSubmit={createInvoice}>
               <Field label="اسم العميل"><Input required value={form.customer} onChange={(event) => setForm({ ...form, customer: event.target.value })} /></Field>
               <Field label="الهاتف"><Input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></Field>
-              <Field label="اسم القطعة"><Input required value={form.item} onChange={(event) => setForm({ ...form, item: event.target.value })} /></Field>
+              <Field label="القطعة من المخزون">
+                <select
+                  required
+                  value={form.inventoryItemId}
+                  onChange={(event) => {
+                    const item = inventoryItems.find((inventoryItem) => String(inventoryItem.id) === event.target.value);
+                    setForm({
+                      ...form,
+                      inventoryItemId: event.target.value,
+                      price: String(item?.sellingPrice || item?.unitCost || ""),
+                    });
+                  }}
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">{inventoryQuery.isLoading ? "جاري تحميل المخزون..." : "اختر قطعة"}</option>
+                  {inventoryItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} - {item.code} - متوفر {item.quantity}
+                    </option>
+                  ))}
+                </select>
+              </Field>
               <Field label="الكمية"><Input type="number" min="1" value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} /></Field>
               <Field label="السعر"><Input required type="number" min="0" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></Field>
               <Field label="ملاحظات"><Textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field>

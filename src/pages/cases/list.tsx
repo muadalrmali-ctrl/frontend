@@ -84,7 +84,7 @@ const ALLOWED_BOARD_TRANSITIONS: Record<string, string[]> = {
   waiting_approval: ["diagnosing", "in_progress", "not_repairable"],
   in_progress: ["repaired", "not_repairable"],
   repaired: [],
-  not_repairable: [],
+  not_repairable: ["diagnosing", "waiting_part"],
 };
 
 const normalizeStatus = (status: string) => status.trim().toLowerCase();
@@ -141,23 +141,11 @@ export function CasesPage() {
       return;
     }
 
-    const values: Record<string, string> = { toStatus };
-
-    if (toStatus === "not_repairable") {
-      const reason = window.prompt("سبب عدم التمكن من الإصلاح");
-      if (!reason?.trim()) {
-        setTransitionError("سبب عدم التمكن من الإصلاح مطلوب قبل نقل الحالة.");
-        return;
-      }
-      values.notes = reason.trim();
-      values.finalResult = reason.trim();
-    }
-
     try {
       await updateStatus({
         resource: "case-status",
         id: caseItem.id,
-        values,
+        values: { toStatus },
       });
       await query.refetch();
     } catch (error) {

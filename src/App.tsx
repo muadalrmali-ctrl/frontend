@@ -20,7 +20,9 @@ import { CasesPage } from "./pages/cases/list";
 import { CreateCasePage } from "./pages/cases/create";
 import { CaseDetailsPage } from "./pages/cases/show";
 import { CustomersPage } from "./pages/customers/list";
+import { CustomerDetailsPage } from "./pages/customers/show";
 import { MaintenanceOperationsPage } from "./pages/maintenance-operations/list";
+import { MaintenanceOperationDetailsPage } from "./pages/maintenance-operations/show";
 import { InventoryPage } from "./pages/inventory/list";
 import { TeamPage } from "./pages/team/list";
 import { SalesPage } from "./pages/sales/list";
@@ -62,6 +64,7 @@ function App() {
               {
                 name: "maintenance-operations",
                 list: "/maintenance-operations",
+                show: "/maintenance-operations/:id",
                 meta: {
                   label: "Maintenance Operations",
                   icon: <Wrench size={16} />,
@@ -102,6 +105,7 @@ function App() {
               {
                 name: "accounting-customers",
                 list: "/accounting/customers",
+                show: "/accounting/customers/:id",
                 meta: {
                   label: "Customers",
                   icon: <UserRound size={16} />,
@@ -149,11 +153,16 @@ function App() {
                   path="maintenance-operations"
                   element={<MaintenanceOperationsPage />}
                 />
+                <Route
+                  path="maintenance-operations/:id"
+                  element={<MaintenanceOperationDetailsPage />}
+                />
                 <Route path="inventory" element={<InventoryPage />} />
                 <Route path="sales" element={<SalesPage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="accounting" element={<AccountingPage />} />
                 <Route path="accounting/customers" element={<CustomersPage />} />
+                <Route path="accounting/customers/:id" element={<CustomerDetailsPage />} />
                 <Route path="accounting/team" element={<TeamPage />} />
               </Route>
             </Routes>

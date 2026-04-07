@@ -78,11 +78,11 @@ const WORKFLOW_COLUMNS: WorkflowColumn[] = [
 ];
 
 const ALLOWED_BOARD_TRANSITIONS: Record<string, string[]> = {
-  received: ["waiting_part", "diagnosing"],
-  waiting_part: ["received", "diagnosing"],
-  diagnosing: ["waiting_part", "waiting_approval"],
-  waiting_approval: ["diagnosing"],
-  in_progress: ["repaired"],
+  received: ["waiting_part", "diagnosing", "not_repairable"],
+  waiting_part: ["received", "diagnosing", "not_repairable"],
+  diagnosing: ["waiting_part", "waiting_approval", "not_repairable"],
+  waiting_approval: ["diagnosing", "in_progress", "not_repairable"],
+  in_progress: ["repaired", "not_repairable"],
   repaired: [],
   not_repairable: [],
 };
@@ -141,11 +141,23 @@ export function CasesPage() {
       return;
     }
 
+    const values: Record<string, string> = { toStatus };
+
+    if (toStatus === "not_repairable") {
+      const reason = window.prompt("سبب عدم التمكن من الإصلاح");
+      if (!reason?.trim()) {
+        setTransitionError("سبب عدم التمكن من الإصلاح مطلوب قبل نقل الحالة.");
+        return;
+      }
+      values.notes = reason.trim();
+      values.finalResult = reason.trim();
+    }
+
     try {
       await updateStatus({
         resource: "case-status",
         id: caseItem.id,
-        values: { toStatus },
+        values,
       });
       await query.refetch();
     } catch (error) {

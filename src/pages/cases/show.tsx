@@ -68,6 +68,7 @@ type CaseData = {
   latestMessage?: string | null;
   latestMessageChannel?: string | null;
   latestMessageSentAt?: string | null;
+  finalResult?: string | null;
   postRepairCompletedWork?: string | null;
   postRepairTested?: boolean;
   postRepairTestCount?: number;
@@ -76,6 +77,7 @@ type CaseData = {
   postRepairImages?: string | null;
   postRepairDamagedPartImages?: string | null;
   postRepairNote?: string | null;
+  notRepairableReason?: string | null;
   readyNotificationMessage?: string | null;
   readyNotificationChannel?: string | null;
   readyNotificationSentAt?: string | null;
@@ -295,6 +297,7 @@ export function CaseDetailsPage() {
           {status === "waiting_approval" && <WaitingApprovalSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "in_progress" && <ExecutionSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "repaired" && <RepairedSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
+          {status === "not_repairable" && <NotRepairableSection details={details} onSaved={loadDetails} />}
         </>
       )}
     </section>
@@ -899,6 +902,79 @@ function ExecutionEditSection({ details, parts, services, onSaved }: { details: 
           </div>
           <Textarea value={messageText} onChange={(event) => setMessageText(event.target.value)} className="min-h-36" />
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function NotRepairableSection({ details, onSaved }: { details: CaseDetailsResponse; onSaved: () => Promise<void> }) {
+  const navigate = useNavigate();
+  const [reason, setReason] = useState(details.caseData.notRepairableReason || details.caseData.finalResult || "");
+  const [error, setError] = useState<string | null>(null);
+
+  const saveReason = async () => {
+    setError(null);
+    if (!reason.trim()) {
+      setError("سبب عدم التمكن من الإصلاح مطلوب.");
+      return false;
+    }
+
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}`, {
+        method: "PATCH",
+        body: {
+          notRepairableReason: reason.trim(),
+          finalResult: reason.trim(),
+        },
+      });
+      await onSaved();
+      return true;
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر حفظ سبب عدم التمكن من الإصلاح");
+      return false;
+    }
+  };
+
+  const finalizeOperation = async () => {
+    setError(null);
+    const saved = await saveReason();
+    if (!saved) return;
+
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/finalize`, { method: "PATCH" });
+      await onSaved();
+      navigate("/maintenance-operations");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر إنهاء العملية");
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>لا يمكن إصلاحها</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        احفظ السبب النهائي بوضوح حتى يبقى ظاهرًا في تفاصيل عملية الصيانة بعد الإنهاء.
+      </p>
+      <Field label="سبب عدم التمكن من الإصلاح">
+        <Textarea
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          className="min-h-36"
+          placeholder="اكتب سبب عدم التمكن من الإصلاح"
+        />
+      </Field>
+      {error && <ErrorMessage message={error} />}
+      <div className="flex flex-wrap gap-3">
+        <Button type="button" variant="outline" onClick={saveReason}>
+          حفظ السبب
+        </Button>
+        <Button type="button" onClick={finalizeOperation}>
+          إنهاء العملية
+        </Button>
+      </div>
       </CardContent>
     </Card>
   );

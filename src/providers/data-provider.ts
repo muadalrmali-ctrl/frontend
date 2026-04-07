@@ -30,15 +30,25 @@ const endpoints: Record<string, ResourceEndpoint> = {
   "case-status": {
     update: (id) => `/api/cases/${id}/status`,
   },
+  "maintenance-operations": {
+    list: "/api/cases/maintenance-operations",
+    show: (id) => `/api/cases/maintenance-operations/${id}`,
+  },
   customers: {
     list: "/api/customers",
     show: (id) => `/api/customers/${id}`,
     create: "/api/customers",
+    update: (id) => `/api/customers/${id}`,
   },
   "accounting-customers": {
     list: "/api/customers",
     show: (id) => `/api/customers/${id}`,
     create: "/api/customers",
+    update: (id) => `/api/customers/${id}`,
+  },
+  "customer-details": {
+    show: (id) => `/api/customers/${id}/details`,
+    update: (id) => `/api/customers/${id}`,
   },
   devices: {
     list: "/api/devices",
@@ -63,6 +73,11 @@ const endpoints: Record<string, ResourceEndpoint> = {
   "inventory-categories": {
     list: "/api/inventory/categories",
     create: "/api/inventory/categories",
+  },
+  invoices: {
+    list: "/api/invoices",
+    show: (id) => `/api/invoices/${id}`,
+    create: "/api/invoices",
   },
 };
 

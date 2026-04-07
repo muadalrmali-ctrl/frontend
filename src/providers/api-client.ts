@@ -4,6 +4,8 @@ export type BackendResponse<T> = {
   success: boolean;
   message: string;
   data: T;
+  error?: string;
+  errors?: unknown;
 };
 
 type ApiClientOptions = {
@@ -128,15 +130,25 @@ export const apiClient = async <T>(
   }
 
   if (!response.ok) {
+    const backendDetail =
+      import.meta.env.DEV && payload?.error
+        ? `${payload.message}: ${payload.error}`
+        : payload?.message;
+
     throw new ApiError(
-      payload?.message ?? "Request failed",
+      backendDetail ?? "Request failed",
       response.status,
       payload
     );
   }
 
   if (payload?.success === false) {
-    throw new ApiError(payload.message ?? "Request failed", response.status, payload);
+    const backendDetail =
+      import.meta.env.DEV && payload.error
+        ? `${payload.message}: ${payload.error}`
+        : payload.message;
+
+    throw new ApiError(backendDetail ?? "Request failed", response.status, payload);
   }
 
   return payload?.data as T;

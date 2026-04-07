@@ -26,6 +26,7 @@ import { SalesPage } from "./pages/sales/list";
 import { ReportsPage } from "./pages/reports/list";
 import { AccountingPage } from "./pages/accounting/list";
 import { LoginPage } from "./pages/login";
+import { AcceptInvitationPage } from "./pages/accept-invitation";
 
 function App() {
   return (
@@ -130,6 +131,7 @@ function App() {
                   </Authenticated>
                 }
               />
+              <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
               <Route
                 element={
                   <Authenticated key="protected-routes" redirectOnFail="/login">

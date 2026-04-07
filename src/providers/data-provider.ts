@@ -46,7 +46,11 @@ const endpoints: Record<string, ResourceEndpoint> = {
     list: "/api/auth/technicians",
   },
   "accounting-team": {
-    list: "/api/auth/technicians",
+    list: "/api/auth/team",
+  },
+  invitations: {
+    list: "/api/invitations",
+    create: "/api/invitations",
   },
   inventory: {
     list: "/api/inventory/items",

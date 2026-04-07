@@ -1,9 +1,19 @@
-import { useMemo } from "react";
-import { useList } from "@refinedev/core";
-import { Eye, Mail, UserRound } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useCreate, useList } from "@refinedev/core";
+import { Copy, Eye, Mail, Plus, UserRound, Warehouse } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 type Technician = {
   id: number;
@@ -13,9 +23,24 @@ type Technician = {
   createdAt?: string | null;
 };
 
+type InvitationRole = "technician" | "store_manager";
+
+type InvitationResult = {
+  id: number;
+  role: InvitationRole;
+  status: string;
+  name?: string | null;
+  phone?: string | null;
+  inviteUrl: string;
+  token: string;
+};
+
 const roleLabels: Record<string, string> = {
   technician: "فني صيانة",
   technician_manager: "مسؤول الفنيين",
+  store_manager: "مسؤول مخزن",
+  receptionist: "موظف استقبال",
+  admin: "إدارة",
 };
 
 const avatarColors = [
@@ -30,11 +55,47 @@ export function TeamPage() {
   const { result, query } = useList<Technician>({
     resource: "accounting-team",
   });
+  const { mutateAsync: createInvitation, mutation } = useCreate();
   const technicians = result.data ?? [];
+  const [inviteRole, setInviteRole] = useState<InvitationRole | null>(null);
+  const [inviteName, setInviteName] = useState("");
+  const [invitePhone, setInvitePhone] = useState("");
+  const [inviteResult, setInviteResult] = useState<InvitationResult | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  const openInviteDialog = (role: InvitationRole) => {
+    setInviteRole(role);
+    setInviteName("");
+    setInvitePhone("");
+    setInviteResult(null);
+    setInviteError(null);
+  };
+
+  const handleCreateInvitation = async () => {
+    if (!inviteRole) return;
+
+    try {
+      setInviteError(null);
+      const result = (await createInvitation({
+        resource: "invitations",
+        values: {
+          role: inviteRole,
+          name: inviteName || undefined,
+          phone: invitePhone || undefined,
+        },
+      })) as { data: InvitationResult };
+
+      setInviteResult(result.data);
+    } catch (error) {
+      setInviteError(
+        error instanceof Error ? error.message : "تعذر إنشاء الدعوة"
+      );
+    }
+  };
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold">الفريق</h1>
           <p className="text-muted-foreground">
@@ -44,6 +105,20 @@ export function TeamPage() {
         <Badge variant="outline" className="w-fit">
           {technicians.length} فنيين
         </Badge>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button type="button" onClick={() => openInviteDialog("technician")}>
+            <Plus />
+            إضافة فني
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => openInviteDialog("store_manager")}
+          >
+            <Warehouse />
+            إضافة مسؤول مخزن
+          </Button>
+        </div>
       </div>
 
       {query.isLoading && (
@@ -70,6 +145,78 @@ export function TeamPage() {
           ))}
         </div>
       )}
+
+      <Dialog open={inviteRole !== null} onOpenChange={(open) => !open && setInviteRole(null)}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>
+              {inviteRole === "store_manager" ? "إضافة مسؤول مخزن" : "إضافة فني"}
+            </DialogTitle>
+            <DialogDescription>
+              أنشئ رابط دعوة مؤقت، وسيقوم الموظف بإكمال البريد وكلمة المرور بنفسه.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!inviteResult ? (
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="inviteName">الاسم</Label>
+                <Input
+                  id="inviteName"
+                  value={inviteName}
+                  onChange={(event) => setInviteName(event.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="invitePhone">الهاتف</Label>
+                <Input
+                  id="invitePhone"
+                  value={invitePhone}
+                  onChange={(event) => setInvitePhone(event.target.value)}
+                />
+              </div>
+              {inviteError && (
+                <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {inviteError}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              <Label htmlFor="inviteUrl">رابط الدعوة</Label>
+              <div className="flex gap-2">
+                <Input id="inviteUrl" readOnly value={inviteResult.inviteUrl} />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigator.clipboard?.writeText(inviteResult.inviteUrl)}
+                >
+                  <Copy />
+                  نسخ
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                أرسل هذا الرابط للموظف ليكمل التسجيل بكلمة مرور يختارها بنفسه.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setInviteRole(null)}>
+              إغلاق
+            </Button>
+            {!inviteResult && (
+              <Button
+                type="button"
+                onClick={handleCreateInvitation}
+                disabled={mutation.isPending}
+              >
+                إنشاء الدعوة
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

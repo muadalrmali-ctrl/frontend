@@ -125,7 +125,7 @@ export const apiClient = async <T>(
     }
   }
 
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     clearStoredAuth();
   }
 

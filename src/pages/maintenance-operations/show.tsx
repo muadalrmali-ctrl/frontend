@@ -56,6 +56,7 @@ export function MaintenanceOperationDetailsPage() {
   const caseData = details?.caseData;
   const repairImages = parseImages(caseData?.postRepairImages);
   const damagedImages = parseImages(caseData?.postRepairDamagedPartImages);
+  const isUnrepaired = caseData?.status === "not_repairable";
 
   return (
     <section className="space-y-6" dir="rtl">
@@ -75,15 +76,24 @@ export function MaintenanceOperationDetailsPage() {
             <Info label="العمل المنجز" value={caseData.postRepairCompletedWork || "غير محدد"} />
             <Info label="سبب عدم التمكن من الإصلاح" value={caseData.notRepairableReason || caseData.finalResult || "غير محدد"} />
           </CardContent></Card>
-          <Card><CardHeader><CardTitle>فحص الجودة والبيانات المحفوظة</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-3">
-            <Info label="اختبار الجهاز" value={caseData.postRepairTested ? `نعم - ${caseData.postRepairTestCount || 1} مرات` : "لا"} />
-            <Info label="تنظيف الجهاز" value={caseData.postRepairCleaned ? "نعم" : "لا"} />
-            <Info label="نصائح فنية" value={caseData.postRepairRecommendations || "غير محدد"} />
-            <Info label="ملاحظة الفني" value={caseData.postRepairNote || "غير محدد"} />
-          </CardContent></Card>
+          {isUnrepaired ? (
+            <Card>
+              <CardHeader><CardTitle>سبب عدم إمكانية إصلاح هذه الحالة</CardTitle></CardHeader>
+              <CardContent>
+                <Info label="السبب" value={caseData.notRepairableReason || caseData.finalResult || "غير محدد"} />
+              </CardContent>
+            </Card>
+          ) : (
+            <Card><CardHeader><CardTitle>فحص الجودة والبيانات المحفوظة</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-3">
+              <Info label="اختبار الجهاز" value={caseData.postRepairTested ? `نعم - ${caseData.postRepairTestCount || 1} مرات` : "لا"} />
+              <Info label="تنظيف الجهاز" value={caseData.postRepairCleaned ? "نعم" : "لا"} />
+              <Info label="نصائح فنية" value={caseData.postRepairRecommendations || "غير محدد"} />
+              <Info label="ملاحظة الفني" value={caseData.postRepairNote || "غير محدد"} />
+            </CardContent></Card>
+          )}
           <InvoiceArchive parts={parts} services={services} />
-          <ImageGrid title="صور الجهاز بعد الإصلاح" images={repairImages} />
-          <ImageGrid title="القطعة المعطوبة" images={damagedImages} />
+          {!isUnrepaired && <ImageGrid title="صور الجهاز بعد الإصلاح" images={repairImages} />}
+          {!isUnrepaired && <ImageGrid title="القطعة المعطوبة" images={damagedImages} />}
         </>
       )}
     </section>

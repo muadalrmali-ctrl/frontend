@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import { useList } from "@refinedev/core";
+import { useList, useNotification } from "@refinedev/core";
 import { useNavigate, useParams } from "react-router";
 import {
   ArrowRight,
@@ -434,6 +434,7 @@ function WaitingPartSection({ details, onSaved }: { details: CaseDetailsResponse
 }
 
 function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
+  const { open } = useNotification();
   const { result } = useList<InventoryItem>({ resource: "inventory" });
   const inventoryItems = result.data ?? [];
   const initialDate = details.caseData.deliveryDueAt ? details.caseData.deliveryDueAt.slice(0, 10) : addDays(3);
@@ -526,6 +527,7 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
           body: { toStatus: "waiting_approval", notes: "Diagnosis approval message prepared. Sending integration is pending." },
         });
       }
+      open?.({ type: "success", message: "تم إرسال الرسالة", description: "تم حفظ رسالة التشخيص ونقل الحالة إلى بانتظار الموافقة." });
       await onSaved();
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذر تجهيز الرسالة");
@@ -585,6 +587,7 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
 }
 
 function WaitingApprovalSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
+  const { open } = useNotification();
   const [isEditingInvoice, setIsEditingInvoice] = useState(false);
   const [showExecutionPrep, setShowExecutionPrep] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -602,6 +605,7 @@ function WaitingApprovalSection({ details, parts, services, onSaved }: { details
           latestMessageSentAt: new Date().toISOString(),
         },
       });
+      open?.({ type: "success", message: "تم إرسال الرسالة", description: "تم تحديث رسالة الموافقة للعميل." });
       await onSaved();
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذر إعادة الإرسال");
@@ -630,6 +634,7 @@ function WaitingApprovalSection({ details, parts, services, onSaved }: { details
 }
 
 function ExecutionPreparationSection({ details, onSaved }: { details: CaseDetailsResponse; onSaved: () => Promise<void> }) {
+  const { open } = useNotification();
   const { result } = useList<UserSummary>({ resource: "technicians" });
   const technicians = result.data ?? [];
   const [durationDays, setDurationDays] = useState("0");
@@ -650,6 +655,7 @@ function ExecutionPreparationSection({ details, onSaved }: { details: CaseDetail
           notes: "Execution prepared after customer approval",
         },
       });
+      open?.({ type: "success", message: "تم بدء التنفيذ", description: "تم نقل الحالة إلى قيد التنفيذ." });
       await onSaved();
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذر بدء التنفيذ");
@@ -679,6 +685,7 @@ function ExecutionPreparationSection({ details, onSaved }: { details: CaseDetail
 }
 
 function ExecutionSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
+  const { open } = useNotification();
   const [now, setNow] = useState(Date.now());
   const [isEditingInvoice, setIsEditingInvoice] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -718,6 +725,7 @@ function ExecutionSection({ details, parts, services, onSaved }: { details: Case
         method: "PATCH",
         body: { notes: "Customer approved updated execution details" },
       });
+      open?.({ type: "success", message: "تم الاستئناف", description: "تم استئناف عداد التنفيذ." });
       await onSaved();
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذر استئناف التنفيذ");
@@ -730,6 +738,7 @@ function ExecutionSection({ details, parts, services, onSaved }: { details: Case
         method: "PATCH",
         body: { notes: "Repair completed" },
       });
+      open?.({ type: "success", message: "تم الإصلاح", description: "تم نقل الحالة إلى تم الإصلاح." });
       await onSaved();
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذر نقل الحالة إلى تم الإصلاح");
@@ -763,6 +772,7 @@ function ExecutionSection({ details, parts, services, onSaved }: { details: Case
 }
 
 function ExecutionEditSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
+  const { open } = useNotification();
   const { result } = useList<InventoryItem>({ resource: "inventory" });
   const inventoryItems = result.data ?? [];
   const initialDate = details.caseData.executionDueAt?.slice(0, 10) || details.caseData.deliveryDueAt?.slice(0, 10) || addDays(1);
@@ -854,6 +864,7 @@ function ExecutionEditSection({ details, parts, services, onSaved }: { details: 
           notes: "Execution details updated and sent to customer",
         },
       });
+      open?.({ type: "success", message: "تم إرسال الرسالة", description: "تم إرسال تحديث التنفيذ وإيقاف المؤقت بانتظار الموافقة." });
       await onSaved();
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذر إرسال تحديث التنفيذ");
@@ -909,39 +920,26 @@ function ExecutionEditSection({ details, parts, services, onSaved }: { details: 
 
 function NotRepairableSection({ details, onSaved }: { details: CaseDetailsResponse; onSaved: () => Promise<void> }) {
   const navigate = useNavigate();
+  const { open } = useNotification();
   const [reason, setReason] = useState(details.caseData.notRepairableReason || details.caseData.finalResult || "");
   const [error, setError] = useState<string | null>(null);
 
-  const saveReason = async () => {
+  const finalizeOperation = async () => {
     setError(null);
     if (!reason.trim()) {
       setError("سبب عدم التمكن من الإصلاح مطلوب.");
-      return false;
+      return;
     }
 
     try {
-      await apiClient(`/api/cases/${details.caseData.id}`, {
+      await apiClient(`/api/cases/${details.caseData.id}/finalize`, {
         method: "PATCH",
         body: {
           notRepairableReason: reason.trim(),
           finalResult: reason.trim(),
         },
       });
-      await onSaved();
-      return true;
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "تعذر حفظ سبب عدم التمكن من الإصلاح");
-      return false;
-    }
-  };
-
-  const finalizeOperation = async () => {
-    setError(null);
-    const saved = await saveReason();
-    if (!saved) return;
-
-    try {
-      await apiClient(`/api/cases/${details.caseData.id}/finalize`, { method: "PATCH" });
+      open?.({ type: "success", message: "تم إنهاء العملية", description: "تم حفظ سبب عدم التمكن من الإصلاح ونقل الحالة إلى عمليات الصيانة." });
       await onSaved();
       navigate("/maintenance-operations");
     } catch (error) {
@@ -968,9 +966,6 @@ function NotRepairableSection({ details, onSaved }: { details: CaseDetailsRespon
       </Field>
       {error && <ErrorMessage message={error} />}
       <div className="flex flex-wrap gap-3">
-        <Button type="button" variant="outline" onClick={saveReason}>
-          حفظ السبب
-        </Button>
         <Button type="button" onClick={finalizeOperation}>
           إنهاء العملية
         </Button>
@@ -982,6 +977,7 @@ function NotRepairableSection({ details, onSaved }: { details: CaseDetailsRespon
 
 function RepairedSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
   const navigate = useNavigate();
+  const { open } = useNotification();
   const actualSeconds = getExecutionElapsedSeconds(details.caseData);
   const estimatedSeconds = getEstimatedExecutionSeconds(details.caseData);
   const performance = getPerformanceIndicator(actualSeconds, estimatedSeconds);
@@ -1041,6 +1037,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
           readyNotificationChannel: readyChannel,
         },
       });
+      open?.({ type: "success", message: "تم إرسال الرسالة", description: "تم حفظ إشعار الجاهزية للعميل." });
       await onSaved();
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذر حفظ إشعار الجاهزية");
@@ -1051,6 +1048,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
     setError(null);
     try {
       await apiClient(`/api/cases/${details.caseData.id}/customer-received`, { method: "PATCH" });
+      open?.({ type: "success", message: "تم الاستلام", description: "تم تسجيل استلام العميل للجهاز." });
       await onSaved();
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذر تسجيل الاستلام");
@@ -1064,6 +1062,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         method: "PATCH",
         body: buildQualityPayload(),
       });
+      open?.({ type: "success", message: "تم إنهاء العملية", description: "تم حفظ بيانات الجودة ونقل الحالة إلى عمليات الصيانة." });
       await onSaved();
       navigate("/maintenance-operations");
     } catch (error) {

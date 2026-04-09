@@ -20,6 +20,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -165,6 +175,29 @@ const buildDiagnosisMessage = (
     "",
     "يرجى تأكيد الموافقة للمتابعة.",
   ].join("\n");
+};
+const buildReadyMessage = (
+  customerName: string,
+  caseCode: string,
+  repairSummary: string,
+  finalCost: string,
+  pickupNote: string
+) => {
+  const optionalPickupNote = pickupNote.trim() ? `\n${pickupNote.trim()}` : "";
+  return [
+    `مرحبًا ${customerName}،`,
+    "",
+    `نود إفادتكم بأن طلب الصيانة رقم ${caseCode} أصبح جاهزًا.`,
+    "",
+    `• ملخص الإصلاح: ${repairSummary || "تم إكمال أعمال الصيانة المطلوبة."}`,
+    `• التكلفة النهائية: ${finalCost}`,
+    "",
+    "يمكنكم مراجعة المركز لاستلام الجهاز.",
+    optionalPickupNote,
+  ]
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 };
 const getRemainingExecutionSeconds = (caseData: CaseData, now: number) => {
   const startedAt = caseData.executionTimerStartedAt ? new Date(caseData.executionTimerStartedAt).getTime() : null;
@@ -764,8 +797,11 @@ function WaitingApprovalSection({ details, parts, services, onSaved }: { details
   const { open } = useNotification();
   const [isEditingInvoice, setIsEditingInvoice] = useState(false);
   const [showExecutionPrep, setShowExecutionPrep] = useState(false);
+  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { invoiceTotal } = getInvoiceTotals(parts, services);
+  const rejectionReason = "Customer rejected repair after diagnosis";
 
   const resendMessage = async () => {
     setError(null);
@@ -793,6 +829,32 @@ function WaitingApprovalSection({ details, parts, services, onSaved }: { details
     }
   };
 
+  const rejectDiagnosis = async () => {
+    setError(null);
+    setIsRejecting(true);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/status`, {
+        method: "PATCH",
+        body: {
+          toStatus: "not_repairable",
+          notes: rejectionReason,
+          finalResult: rejectionReason,
+        },
+      });
+      open?.({
+        type: "success",
+        message: "تم تسجيل الرفض",
+        description: "تم نقل الحالة إلى لا يمكن إصلاحها بعد رفض العميل المتابعة.",
+      });
+      setIsRejectDialogOpen(false);
+      await onSaved();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر تسجيل رفض العميل");
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
   return (
     <div className="grid gap-6">
       <Card className="rounded-lg">
@@ -804,10 +866,28 @@ function WaitingApprovalSection({ details, parts, services, onSaved }: { details
           <div className="flex flex-wrap gap-3">
             <Button type="button" variant="outline" onClick={() => setIsEditingInvoice((value) => !value)}>تعديل الفاتورة</Button>
             <Button type="button" variant="outline" onClick={resendMessage}><RotateCcw /> إعادة الإرسال</Button>
+            <Button type="button" variant="outline" onClick={() => setIsRejectDialogOpen(true)}>رفض العميل</Button>
             <Button type="button" onClick={() => setShowExecutionPrep(true)}><CheckCircle2 /> تمت الموافقة</Button>
           </div>
         </CardContent>
       </Card>
+      <AlertDialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد رفض العميل</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم نقل الحالة إلى "لا يمكن إصلاحها" باستخدام سبب افتراضي: "Customer rejected repair after diagnosis".
+              يمكن تعديل السبب لاحقًا من تفاصيل الحالة قبل إنهاء العملية.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRejecting}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={rejectDiagnosis} disabled={isRejecting}>
+              {isRejecting ? "جارٍ التنفيذ..." : "تأكيد الرفض"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {isEditingInvoice && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={onSaved} />}
       {showExecutionPrep && <ExecutionPreparationSection details={details} onSaved={onSaved} />}
     </div>
@@ -1178,10 +1258,41 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
   const [repairImages, setRepairImages] = useState<string[]>(parseImageList(details.caseData.postRepairImages));
   const [damagedPartImages, setDamagedPartImages] = useState<string[]>(parseImageList(details.caseData.postRepairDamagedPartImages));
   const [note, setNote] = useState(details.caseData.postRepairNote || "");
-  const defaultReadyMessage = `السلام عليكم، جهازك جاهز للاستلام.\nرقم الحالة: ${details.caseData.caseCode}\nالإجمالي: ${formatMoney(invoiceTotal)}\n${completedWork ? `ملخص العمل: ${completedWork}` : ""}`;
-  const [readyMessage, setReadyMessage] = useState(details.caseData.readyNotificationMessage || defaultReadyMessage);
+  const [isReadyDialogOpen, setIsReadyDialogOpen] = useState(false);
+  const [readySummary, setReadySummary] = useState(details.caseData.postRepairCompletedWork || "");
+  const [readyFinalCost, setReadyFinalCost] = useState(formatMoney(invoiceTotal));
+  const [pickupNote, setPickupNote] = useState("");
+  const [readyMessage, setReadyMessage] = useState(details.caseData.readyNotificationMessage || "");
   const [readyChannel, setReadyChannel] = useState(details.caseData.readyNotificationChannel || "WhatsApp");
+  const [isReadyMessageDirty, setIsReadyMessageDirty] = useState(false);
+  const [isSendingReady, setIsSendingReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const customerName = details.customer?.name || "العميل";
+  const customerPhone = details.customer?.phone || "";
+  const generatedReadyMessage = useMemo(
+    () =>
+      buildReadyMessage(
+        customerName,
+        details.caseData.caseCode,
+        readySummary,
+        readyFinalCost,
+        pickupNote
+      ),
+    [customerName, details.caseData.caseCode, pickupNote, readyFinalCost, readySummary]
+  );
+
+  useEffect(() => {
+    if (!isReadyDialogOpen) return;
+    setReadySummary(completedWork || details.caseData.postRepairCompletedWork || "");
+    setReadyFinalCost(formatMoney(invoiceTotal));
+    setIsReadyMessageDirty(false);
+  }, [completedWork, details.caseData.postRepairCompletedWork, invoiceTotal, isReadyDialogOpen]);
+
+  useEffect(() => {
+    if (!isReadyMessageDirty) {
+      setReadyMessage(generatedReadyMessage);
+    }
+  }, [generatedReadyMessage, isReadyMessageDirty]);
 
   const uploadImages = (event: ChangeEvent<HTMLInputElement>, setter: (images: string[]) => void, current: string[]) => {
     const files = Array.from(event.target.files ?? []).slice(0, 4 - current.length);
@@ -1217,18 +1328,26 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
 
   const sendReadyNotification = async () => {
     setError(null);
+    if (!customerPhone.trim()) {
+      setError("رقم هاتف العميل مطلوب قبل إرسال إشعار الجاهزية.");
+      return;
+    }
+    setIsSendingReady(true);
     try {
       await apiClient(`/api/cases/${details.caseData.id}/ready-notification`, {
         method: "PATCH",
         body: {
-          readyNotificationMessage: readyMessage,
+          readyNotificationMessage: readyMessage || generatedReadyMessage,
           readyNotificationChannel: readyChannel,
         },
       });
-      open?.({ type: "success", message: "تم إرسال الرسالة", description: "تم حفظ إشعار الجاهزية للعميل." });
+      open?.({ type: "success", message: "تم إرسال الرسالة", description: "تم إرسال إشعار الجاهزية للعميل." });
+      setIsReadyDialogOpen(false);
       await onSaved();
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذر حفظ إشعار الجاهزية");
+    } finally {
+      setIsSendingReady(false);
     }
   };
 
@@ -1294,6 +1413,10 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         <InvoicePreview parts={parts} services={services} />
         <p className="text-sm text-muted-foreground">صور ما بعد الإصلاح والقطعة المعطوبة محفوظة مع الحالة ويمكن ربطها كمرفقات عند تفعيل تكامل WhatsApp/SMS لاحقا.</p>
         <div className="flex flex-wrap gap-3">
+          <Button type="button" variant="outline" onClick={() => setIsReadyDialogOpen(true)}>
+            <Send />
+            Send Ready Message
+          </Button>
           <Select value={readyChannel} onValueChange={setReadyChannel}>
             <SelectTrigger className="w-full md:w-56"><SelectValue /></SelectTrigger>
             <SelectContent>{channelLabels.filter((item) => item !== "other").map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
@@ -1303,6 +1426,77 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
           <Button type="button" onClick={finalizeOperation} disabled={!details.caseData.customerReceivedAt}>إنهاء العملية</Button>
         </div>
         <Textarea value={readyMessage} onChange={(event) => setReadyMessage(event.target.value)} className="min-h-36" />
+        <Dialog open={isReadyDialogOpen} onOpenChange={setIsReadyDialogOpen}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>إرسال إشعار الجاهزية</DialogTitle>
+              <DialogDescription>
+                راجع ملخص الإصلاح والتكلفة النهائية قبل إرسال رسالة الجاهزية. إرسال الصور والمرفقات سيُترك لخطوة لاحقة.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="اسم العميل">
+                  <Input value={customerName} readOnly />
+                </Field>
+                <Field label="رقم الهاتف">
+                  <Input value={customerPhone} readOnly dir="ltr" />
+                </Field>
+                <Field label="رقم الحالة">
+                  <Input value={details.caseData.caseCode} readOnly dir="ltr" />
+                </Field>
+                <Field label="قناة الإرسال">
+                  <Select value={readyChannel} onValueChange={setReadyChannel}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {channelLabels.filter((item) => item !== "other").map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              <Field label="ملخص الإصلاح">
+                <Textarea value={readySummary} onChange={(event) => setReadySummary(event.target.value)} className="min-h-28" />
+              </Field>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="التكلفة النهائية">
+                  <Input value={readyFinalCost} onChange={(event) => setReadyFinalCost(event.target.value)} />
+                </Field>
+                <Field label="ملاحظة الاستلام">
+                  <Input value={pickupNote} onChange={(event) => setPickupNote(event.target.value)} placeholder="مثال: يرجى الحضور بين 9 ص و5 م" />
+                </Field>
+              </div>
+              <Field label="معاينة الرسالة النهائية">
+                <Textarea
+                  value={readyMessage}
+                  onChange={(event) => {
+                    setReadyMessage(event.target.value);
+                    setIsReadyMessageDirty(true);
+                  }}
+                  className="min-h-56"
+                />
+              </Field>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setReadyMessage(generatedReadyMessage);
+                  setIsReadyMessageDirty(false);
+                }}
+              >
+                تحديث المعاينة
+              </Button>
+              <Button type="button" variant="outline" onClick={() => setIsReadyDialogOpen(false)} disabled={isSendingReady}>
+                إلغاء
+              </Button>
+              <Button type="button" onClick={sendReadyNotification} disabled={isSendingReady}>
+                <Send />
+                {isSendingReady ? "جاري الإرسال..." : "إرسال إشعار الجاهزية"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
     </div>

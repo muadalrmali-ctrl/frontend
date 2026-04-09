@@ -112,6 +112,12 @@ type CaseHistory = { id: number; toStatus: string; notes?: string | null; create
 type InventoryItem = { id: number; name: string; code: string; quantity?: number; sellingPrice?: string | null; unitCost?: string | null; imageUrl?: string | null };
 type CasePart = { id: number; quantity: number; unitPrice: string; totalPrice: string; inventoryName?: string | null; inventoryCode?: string | null; inventoryImageUrl?: string | null };
 type CaseService = { id: number; serviceName: string; quantity: number; unitPrice: string; totalPrice: string };
+type ReadyMediaOption = {
+  id: string;
+  label: string;
+  imageUrl: string;
+  sendable: boolean;
+};
 
 const statusLabels: Record<string, string> = {
   received: "حالة جديدة",
@@ -274,6 +280,7 @@ const parseImageList = (value?: string | null) => {
 };
 
 const stringifyImageList = (images: string[]) => JSON.stringify(images);
+const isPublicMediaUrl = (value: string) => /^https?:\/\//i.test(value.trim());
 
 export function CaseDetailsPage() {
   const { id } = useParams();
@@ -1266,9 +1273,28 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
   const [readyChannel, setReadyChannel] = useState(details.caseData.readyNotificationChannel || "WhatsApp");
   const [isReadyMessageDirty, setIsReadyMessageDirty] = useState(false);
   const [isSendingReady, setIsSendingReady] = useState(false);
+  const [selectedReadyMediaUrls, setSelectedReadyMediaUrls] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const customerName = details.customer?.name || "العميل";
   const customerPhone = details.customer?.phone || "";
+  const availableReadyMedia = useMemo<ReadyMediaOption[]>(
+    () =>
+      [
+        ...repairImages.map((imageUrl, index) => ({
+          id: `repair-${index}`,
+          label: `صورة الجهاز بعد الإصلاح ${index + 1}`,
+          imageUrl,
+          sendable: isPublicMediaUrl(imageUrl),
+        })),
+        ...damagedPartImages.map((imageUrl, index) => ({
+          id: `damaged-${index}`,
+          label: `صورة القطعة المعطوبة ${index + 1}`,
+          imageUrl,
+          sendable: isPublicMediaUrl(imageUrl),
+        })),
+      ],
+    [damagedPartImages, repairImages]
+  );
   const generatedReadyMessage = useMemo(
     () =>
       buildReadyMessage(
@@ -1286,7 +1312,10 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
     setReadySummary(completedWork || details.caseData.postRepairCompletedWork || "");
     setReadyFinalCost(formatMoney(invoiceTotal));
     setIsReadyMessageDirty(false);
-  }, [completedWork, details.caseData.postRepairCompletedWork, invoiceTotal, isReadyDialogOpen]);
+    setSelectedReadyMediaUrls(
+      availableReadyMedia.filter((item) => item.sendable).map((item) => item.imageUrl)
+    );
+  }, [availableReadyMedia, completedWork, details.caseData.postRepairCompletedWork, invoiceTotal, isReadyDialogOpen]);
 
   useEffect(() => {
     if (!isReadyMessageDirty) {
@@ -1339,6 +1368,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         body: {
           readyNotificationMessage: readyMessage || generatedReadyMessage,
           readyNotificationChannel: readyChannel,
+          mediaUrls: selectedReadyMediaUrls,
         },
       });
       open?.({ type: "success", message: "تم إرسال الرسالة", description: "تم إرسال إشعار الجاهزية للعميل." });
@@ -1417,15 +1447,9 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
             <Send />
             Send Ready Message
           </Button>
-          <Select value={readyChannel} onValueChange={setReadyChannel}>
-            <SelectTrigger className="w-full md:w-56"><SelectValue /></SelectTrigger>
-            <SelectContent>{channelLabels.filter((item) => item !== "other").map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
-          </Select>
-          <Button type="button" onClick={sendReadyNotification}><Send /> إرسال إشعار الجاهزية</Button>
           <Button type="button" variant="outline" onClick={markReceived} disabled={!details.caseData.readyNotificationSentAt}>تم الاستلام</Button>
           <Button type="button" onClick={finalizeOperation} disabled={!details.caseData.customerReceivedAt}>إنهاء العملية</Button>
         </div>
-        <Textarea value={readyMessage} onChange={(event) => setReadyMessage(event.target.value)} className="min-h-36" />
         <Dialog open={isReadyDialogOpen} onOpenChange={setIsReadyDialogOpen}>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl" dir="rtl">
             <DialogHeader>
@@ -1464,6 +1488,53 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
                 <Field label="ملاحظة الاستلام">
                   <Input value={pickupNote} onChange={(event) => setPickupNote(event.target.value)} placeholder="مثال: يرجى الحضور بين 9 ص و5 م" />
                 </Field>
+              </div>
+              <div className="grid gap-3 rounded-lg border p-4">
+                <div className="space-y-1">
+                  <Label>الصور المرفقة مع الرسالة</Label>
+                  <p className="text-sm text-muted-foreground">
+                    سيتم إرسال الصور فقط إذا كانت محفوظة كرابط عام مباشر. الصور المحلية المضمنة داخل الحالة ستبقى للمعاينة فقط حتى يتم ربط تخزين عام للوسائط.
+                  </p>
+                </div>
+                {availableReadyMedia.length === 0 ? (
+                  <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                    لا توجد صور محفوظة مع هذه الحالة حاليًا. يمكن إرسال الرسالة كنص فقط دون مشكلة.
+                  </p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {availableReadyMedia.map((media) => {
+                      const checked = selectedReadyMediaUrls.includes(media.imageUrl);
+                      return (
+                        <label
+                          key={media.id}
+                          className={`grid gap-3 rounded-lg border p-3 ${media.sendable ? "cursor-pointer" : "opacity-70"}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={!media.sendable}
+                              onChange={(event) => {
+                                setSelectedReadyMediaUrls((current) =>
+                                  event.target.checked
+                                    ? [...current, media.imageUrl]
+                                    : current.filter((item) => item !== media.imageUrl)
+                                );
+                              }}
+                            />
+                            <div className="grid gap-2">
+                              <span className="font-medium">{media.label}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {media.sendable ? "رابط عام جاهز للإرسال" : "غير قابل للإرسال حاليًا لأنه ليس رابطًا عامًا"}
+                              </span>
+                            </div>
+                          </div>
+                          <ImageBox imageUrl={media.imageUrl} label={media.label} />
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               <Field label="معاينة الرسالة النهائية">
                 <Textarea

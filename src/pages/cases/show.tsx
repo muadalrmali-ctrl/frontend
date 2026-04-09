@@ -19,6 +19,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -137,16 +145,25 @@ const getInvoiceTotals = (parts: CasePart[], services: CaseService[]) => {
   return { partsTotal, servicesTotal, invoiceTotal: partsTotal + servicesTotal };
 };
 const getDiagnosisText = (caseData: CaseData) => caseData.diagnosisNote || caseData.faultCause || "";
-const buildDiagnosisMessage = (details: CaseDetailsResponse, invoiceTotal: number, expectedDays: string, diagnosisText: string) => {
+const buildDiagnosisMessage = (
+  details: CaseDetailsResponse,
+  estimatedCost: string,
+  expectedDelivery: string,
+  diagnosisText: string
+) => {
   const customerName = details.customer?.name || "العميل";
-  const daysText = expectedDays || "غير محدد";
+  const caseCode = details.caseData.caseCode || String(details.caseData.id);
+  const deliveryText = expectedDelivery || "غير محدد";
+  const estimatedCostText = estimatedCost || "غير محددة";
   return [
-    `السلام عليكم أستاذ ${customerName}`,
-    `نود أن نعلمك أن تشخيص الحالة ${details.caseData.caseCode} هو:`,
-    diagnosisText || "لم يتم إدخال ملاحظة التشخيص بعد.",
-    `التكلفة التقديرية: ${formatMoney(invoiceTotal)}`,
-    "هل توافق على العمل؟",
-    `موعد التسليم المتوقع بعد الموافقة: ${daysText} يوم`,
+    `مرحبًا ${customerName}،`,
+    "",
+    `بعد فحص طلب الصيانة رقم ${caseCode}، تبين التالي:`,
+    `- التشخيص: ${diagnosisText || "لم يتم إدخال التشخيص بعد."}`,
+    `- التكلفة التقديرية: ${estimatedCostText}`,
+    `- الموعد المتوقع: ${deliveryText}`,
+    "",
+    "يرجى تأكيد الموافقة للمتابعة.",
   ].join("\n");
 };
 const getRemainingExecutionSeconds = (caseData: CaseData, now: number) => {
@@ -445,17 +462,39 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
   const [partQuantity, setPartQuantity] = useState("1");
   const [serviceName, setServiceName] = useState("");
   const [servicePrice, setServicePrice] = useState("");
-  const [channel, setChannel] = useState(details.caseData.latestMessageChannel || "WhatsApp");
+  const [isDiagnosisDialogOpen, setIsDiagnosisDialogOpen] = useState(false);
+  const [messageDiagnosisText, setMessageDiagnosisText] = useState(getDiagnosisText(details.caseData));
+  const [messageEstimatedCost, setMessageEstimatedCost] = useState(formatMoney(getInvoiceTotals(parts, services).invoiceTotal));
+  const [messageExpectedDelivery, setMessageExpectedDelivery] = useState(initialDate);
   const [messageText, setMessageText] = useState("");
   const [isMessageDirty, setIsMessageDirty] = useState(false);
+  const [isSendingDiagnosis, setIsSendingDiagnosis] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { invoiceTotal } = getInvoiceTotals(parts, services);
   const selectedPart = inventoryItems.find((item) => String(item.id) === selectedPartId);
-  const generatedMessage = useMemo(() => buildDiagnosisMessage(details, invoiceTotal, deliveryDays, diagnosisText), [details, invoiceTotal, deliveryDays, diagnosisText]);
+  const generatedMessage = useMemo(
+    () =>
+      buildDiagnosisMessage(
+        details,
+        messageEstimatedCost,
+        messageExpectedDelivery,
+        messageDiagnosisText
+      ),
+    [details, messageDiagnosisText, messageEstimatedCost, messageExpectedDelivery]
+  );
 
   useEffect(() => {
     if (!isMessageDirty) setMessageText(generatedMessage);
   }, [generatedMessage, isMessageDirty]);
+
+  useEffect(() => {
+    if (!isDiagnosisDialogOpen) return;
+
+    setMessageDiagnosisText(diagnosisText);
+    setMessageEstimatedCost(formatMoney(invoiceTotal));
+    setMessageExpectedDelivery(deliveryDate);
+    setIsMessageDirty(false);
+  }, [deliveryDate, diagnosisText, invoiceTotal, isDiagnosisDialogOpen]);
 
   const handleDateChange = (value: string) => {
     setDeliveryDate(value);
@@ -467,6 +506,10 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
     setDeliveryDate(addDays(safeDays));
   };
   const expectedDeliveryAt = useMemo(() => new Date(`${deliveryDate}T12:00:00`).toISOString(), [deliveryDate]);
+  const messageExpectedDeliveryAt = useMemo(() => {
+    if (!messageExpectedDelivery) return null;
+    return new Date(`${messageExpectedDelivery}T12:00:00`).toISOString();
+  }, [messageExpectedDelivery]);
 
   const persistDiagnosis = async () => {
     await apiClient(`/api/cases/${details.caseData.id}`, {
@@ -514,23 +557,77 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
     }
   };
   const handleSendMessage = async () => {
+    const customerName = details.customer?.name?.trim() || "";
+    const customerPhone = details.customer?.phone?.trim() || "";
+    const normalizedDiagnosis = messageDiagnosisText.trim();
+
+    if (!customerName) {
+      setError("اسم العميل غير متوفر في بيانات الحالة.");
+      return;
+    }
+
+    if (!customerPhone) {
+      setError("رقم هاتف العميل مطلوب قبل إرسال رسالة التشخيص.");
+      return;
+    }
+
+    if (!normalizedDiagnosis) {
+      setError("يرجى إدخال التشخيص قبل إرسال الرسالة.");
+      return;
+    }
+
     setError(null);
+    setIsSendingDiagnosis(true);
     try {
-      await persistDiagnosis();
       await apiClient(`/api/cases/${details.caseData.id}`, {
         method: "PATCH",
-        body: { latestMessage: messageText || generatedMessage, latestMessageChannel: channel, latestMessageSentAt: new Date().toISOString() },
+        body: {
+          diagnosisNote: normalizedDiagnosis,
+          faultCause: normalizedDiagnosis,
+          deliveryDueAt: messageExpectedDeliveryAt,
+        },
       });
+
+      const finalMessage = messageText || generatedMessage;
+
+      await apiClient(`/api/cases/${details.caseData.id}`, {
+        method: "PATCH",
+        body: {
+          latestMessage: finalMessage,
+          latestMessageChannel: "WhatsApp",
+          latestMessageSentAt: new Date().toISOString(),
+        },
+      });
+
+      await apiClient(`/api/notifications/send-customer-message`, {
+        method: "POST",
+        body: {
+          caseId: details.caseData.caseCode || String(details.caseData.id),
+          customerName,
+          customerPhone,
+          messageBody: finalMessage,
+          channel: "whatsapp",
+          type: "diagnosis",
+        },
+      });
+
       if (details.caseData.status !== "waiting_approval") {
         await apiClient(`/api/cases/${details.caseData.id}/status`, {
           method: "PATCH",
-          body: { toStatus: "waiting_approval", notes: "Diagnosis approval message prepared. Sending integration is pending." },
+          body: { toStatus: "waiting_approval", notes: "Diagnosis approval message sent to customer via notifications workflow." },
         });
       }
-      open?.({ type: "success", message: "تم إرسال الرسالة", description: "تم حفظ رسالة التشخيص ونقل الحالة إلى بانتظار الموافقة." });
+      open?.({
+        type: "success",
+        message: "تم إرسال الرسالة",
+        description: "تم إرسال رسالة التشخيص للعميل ونقل الحالة إلى بانتظار الموافقة.",
+      });
+      setIsDiagnosisDialogOpen(false);
       await onSaved();
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذر تجهيز الرسالة");
+    } finally {
+      setIsSendingDiagnosis(false);
     }
   };
 
@@ -568,19 +665,96 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
           </Card>
         </div>
         <InvoicePreview parts={parts} services={services} />
-        <div className="grid gap-4">
-          <div className="flex items-center gap-2"><MessageSquare className="size-5" /><h3 className="text-lg font-semibold">التواصل مع العميل</h3></div>
+        <div className="grid gap-4 rounded-lg border p-4">
+          <div className="flex items-center gap-2"><MessageSquare className="size-5" /><h3 className="text-lg font-semibold">إرسال التشخيص للعميل</h3></div>
+          <p className="text-sm text-muted-foreground">
+            راجع التشخيص والتكلفة المتوقعة والموعد المتوقع ثم أرسل الرسالة عبر WhatsApp من خلال تكامل الباكند مع n8n.
+          </p>
           <div className="flex flex-wrap gap-3">
-            <Select value={channel} onValueChange={setChannel}>
-              <SelectTrigger className="w-full md:w-64"><SelectValue /></SelectTrigger>
-              <SelectContent>{channelLabels.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
-            </Select>
-            <Button type="button" variant="outline" onClick={() => { setMessageText(generatedMessage); setIsMessageDirty(false); }}>تحديث الرسالة من البيانات</Button>
+            <Button type="button" className="w-fit" onClick={() => setIsDiagnosisDialogOpen(true)}>
+              <Send />
+              Send Diagnosis
+            </Button>
           </div>
-          <Textarea value={messageText} onChange={(event) => { setMessageText(event.target.value); setIsMessageDirty(true); }} className="min-h-44" />
-          <p className="text-sm text-muted-foreground">الإرسال الفعلي عبر WhatsApp/SMS/Email غير مربوط بعد. الزر يحفظ محتوى الرسالة وينقل الحالة إلى بانتظار الموافقة عند التشخيص.</p>
-          <Button type="button" className="w-fit" onClick={handleSendMessage}><Send /> إرسال رسالة</Button>
         </div>
+        <Dialog open={isDiagnosisDialogOpen} onOpenChange={setIsDiagnosisDialogOpen}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>إرسال التشخيص</DialogTitle>
+              <DialogDescription>
+                راجع الرسالة النهائية قبل الإرسال. سيتم إرسالها من الباكند إلى n8n ثم إلى WhatsApp.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="اسم العميل">
+                  <Input value={details.customer?.name || ""} readOnly />
+                </Field>
+                <Field label="رقم الهاتف">
+                  <Input value={details.customer?.phone || ""} readOnly dir="ltr" />
+                </Field>
+                <Field label="رقم الحالة">
+                  <Input value={details.caseData.caseCode || String(details.caseData.id)} readOnly dir="ltr" />
+                </Field>
+                <Field label="الموعد المتوقع">
+                  <Input
+                    type="date"
+                    value={messageExpectedDelivery}
+                    onChange={(event) => setMessageExpectedDelivery(event.target.value)}
+                  />
+                </Field>
+              </div>
+              <Field label="التشخيص">
+                <Textarea
+                  value={messageDiagnosisText}
+                  onChange={(event) => setMessageDiagnosisText(event.target.value)}
+                  className="min-h-28"
+                />
+              </Field>
+              <Field label="التكلفة التقديرية">
+                <Input
+                  value={messageEstimatedCost}
+                  onChange={(event) => setMessageEstimatedCost(event.target.value)}
+                  placeholder="مثال: 150 د.ل"
+                />
+              </Field>
+              <Field label="معاينة الرسالة النهائية">
+                <Textarea
+                  value={messageText}
+                  onChange={(event) => {
+                    setMessageText(event.target.value);
+                    setIsMessageDirty(true);
+                  }}
+                  className="min-h-56"
+                />
+              </Field>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setMessageText(generatedMessage);
+                  setIsMessageDirty(false);
+                }}
+              >
+                تحديث المعاينة
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsDiagnosisDialogOpen(false)}
+                disabled={isSendingDiagnosis}
+              >
+                إلغاء
+              </Button>
+              <Button type="button" onClick={handleSendMessage} disabled={isSendingDiagnosis}>
+                <Send />
+                {isSendingDiagnosis ? "جاري الإرسال..." : "إرسال التشخيص"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
@@ -596,7 +770,14 @@ function WaitingApprovalSection({ details, parts, services, onSaved }: { details
   const resendMessage = async () => {
     setError(null);
     try {
-      const message = details.caseData.latestMessage || buildDiagnosisMessage(details, invoiceTotal, "غير محدد", getDiagnosisText(details.caseData));
+      const message =
+        details.caseData.latestMessage ||
+        buildDiagnosisMessage(
+          details,
+          formatMoney(invoiceTotal),
+          "غير محدد",
+          getDiagnosisText(details.caseData)
+        );
       await apiClient(`/api/cases/${details.caseData.id}`, {
         method: "PATCH",
         body: {
@@ -788,7 +969,14 @@ function ExecutionEditSection({ details, parts, services, onSaved }: { details: 
 
   useEffect(() => {
     if (!messageText) {
-      setMessageText(buildDiagnosisMessage(details, invoiceTotal, "حسب التحديث", getDiagnosisText(details.caseData)));
+      setMessageText(
+        buildDiagnosisMessage(
+          details,
+          formatMoney(invoiceTotal),
+          "حسب التحديث",
+          getDiagnosisText(details.caseData)
+        )
+      );
     }
   }, [details, invoiceTotal, messageText]);
 

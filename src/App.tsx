@@ -24,6 +24,7 @@ import { CustomerDetailsPage } from "./pages/customers/show";
 import { MaintenanceOperationsPage } from "./pages/maintenance-operations/list";
 import { MaintenanceOperationDetailsPage } from "./pages/maintenance-operations/show";
 import { InventoryPage } from "./pages/inventory/list";
+import { InventoryDetailsPage } from "./pages/inventory/show";
 import { TeamPage } from "./pages/team/list";
 import { SalesPage } from "./pages/sales/list";
 import { ReportsPage } from "./pages/reports/list";
@@ -73,6 +74,7 @@ function App() {
               {
                 name: "inventory",
                 list: "/inventory",
+                show: "/inventory/:id",
                 meta: {
                   label: "Inventory",
                   icon: <Package size={16} />,
@@ -158,6 +160,7 @@ function App() {
                   element={<MaintenanceOperationDetailsPage />}
                 />
                 <Route path="inventory" element={<InventoryPage />} />
+                <Route path="inventory/:id" element={<InventoryDetailsPage />} />
                 <Route path="sales" element={<SalesPage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="accounting" element={<AccountingPage />} />

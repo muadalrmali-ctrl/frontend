@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, ReactNode, useMemo, useState } from "react";
 import { useCreate, useList } from "@refinedev/core";
 import { Grid2X2, ImageIcon, List, PackagePlus, Search, Upload } from "lucide-react";
+import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -507,7 +508,9 @@ function InventoryListView({
               return (
                 <TableRow key={item.id}>
                   <TableCell className="min-w-56 font-medium">
-                    {item.name}
+                    <Link to={`/inventory/${item.id}`} className="hover:underline">
+                      {item.name}
+                    </Link>
                   </TableCell>
                   <TableCell>{item.code}</TableCell>
                   <TableCell>{getCategoryName(item, categoriesById)}</TableCell>
@@ -545,7 +548,8 @@ function InventoryBoxView({
         return (
           <Card key={item.id} className="overflow-hidden rounded-lg">
             <CardHeader className="space-y-3">
-              <ImagePreview imageUrl={item.imageUrl ?? ""} name={item.name} />
+              <Link to={`/inventory/${item.id}`} className="space-y-3">
+                <ImagePreview imageUrl={item.imageUrl ?? ""} name={item.name} />
               <div className="space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <CardTitle className="text-lg leading-7">{item.name}</CardTitle>
@@ -555,6 +559,7 @@ function InventoryBoxView({
                 </div>
                 <p className="text-sm text-muted-foreground">{item.code}</p>
               </div>
+              </Link>
             </CardHeader>
             <CardContent className="grid gap-3 text-sm">
               <InfoRow label="الفئة" value={getCategoryName(item, categoriesById)} />

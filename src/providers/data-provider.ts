@@ -60,6 +60,7 @@ const endpoints: Record<string, ResourceEndpoint> = {
   },
   "accounting-team": {
     list: "/api/auth/team",
+    show: (id) => `/api/auth/team/${id}`,
   },
   invitations: {
     list: "/api/invitations",

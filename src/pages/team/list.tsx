@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useCreate, useList } from "@refinedev/core";
 import { Copy, Eye, Mail, Plus, UserRound, Warehouse } from "lucide-react";
+import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -15,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type Technician = {
+type TeamMember = {
   id: number;
   name: string;
   email: string;
@@ -52,11 +53,11 @@ const avatarColors = [
 ];
 
 export function TeamPage() {
-  const { result, query } = useList<Technician>({
+  const { result, query } = useList<TeamMember>({
     resource: "accounting-team",
   });
   const { mutateAsync: createInvitation, mutation } = useCreate();
-  const technicians = result.data ?? [];
+  const teamMembers = result.data ?? [];
   const [inviteRole, setInviteRole] = useState<InvitationRole | null>(null);
   const [inviteName, setInviteName] = useState("");
   const [invitePhone, setInvitePhone] = useState("");
@@ -103,7 +104,7 @@ export function TeamPage() {
           </p>
         </div>
         <Badge variant="outline" className="w-fit">
-          {technicians.length} فنيين
+          {teamMembers.length} عضو
         </Badge>
         <div className="flex flex-col gap-2 sm:flex-row">
           <Button type="button" onClick={() => openInviteDialog("technician")}>
@@ -129,14 +130,14 @@ export function TeamPage() {
           {query.error.message}
         </p>
       )}
-      {!query.isLoading && !query.error && technicians.length === 0 && (
+      {!query.isLoading && !query.error && teamMembers.length === 0 && (
         <div className="rounded-lg border border-dashed bg-card p-8 text-center text-muted-foreground">
           لا يوجد فنيون.
         </div>
       )}
-      {!query.isLoading && !query.error && technicians.length > 0 && (
+      {!query.isLoading && !query.error && teamMembers.length > 0 && (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {technicians.map((technician, index) => (
+          {teamMembers.map((technician, index) => (
             <TechnicianCard
               key={technician.id}
               technician={technician}
@@ -225,7 +226,7 @@ function TechnicianCard({
   technician,
   colorClass,
 }: {
-  technician: Technician;
+  technician: TeamMember;
   colorClass: string;
 }) {
   const initials = useMemo(
@@ -241,6 +242,7 @@ function TechnicianCard({
 
   return (
     <Card className="group overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
+      <Link to={`/accounting/team/${technician.id}`}>
       <CardContent className="flex min-h-56 flex-col items-center justify-center p-6 text-center">
         <div
           className={`mb-5 flex size-24 items-center justify-center rounded-full ${colorClass} shadow-inner`}
@@ -260,11 +262,14 @@ function TechnicianCard({
           <span className="truncate">{technician.email}</span>
         </div>
       </CardContent>
+      </Link>
       <CardFooter className="flex justify-between border-t bg-muted/20 px-4 py-3 text-sm">
         <span className="text-muted-foreground">جاهز للتعيين</span>
-        <Button type="button" variant="ghost" size="sm" className="gap-2">
+        <Button type="button" variant="ghost" size="sm" className="gap-2" asChild>
+          <Link to={`/accounting/team/${technician.id}`}>
           <Eye className="size-4" />
           عرض
+          </Link>
         </Button>
       </CardFooter>
     </Card>

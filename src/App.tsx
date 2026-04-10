@@ -26,6 +26,7 @@ import { MaintenanceOperationDetailsPage } from "./pages/maintenance-operations/
 import { InventoryPage } from "./pages/inventory/list";
 import { InventoryDetailsPage } from "./pages/inventory/show";
 import { TeamPage } from "./pages/team/list";
+import { TeamMemberDetailsPage } from "./pages/team/show";
 import { SalesPage } from "./pages/sales/list";
 import { SalesDetailsPage } from "./pages/sales/show";
 import { ReportsPage } from "./pages/reports/list";
@@ -119,6 +120,7 @@ function App() {
               {
                 name: "accounting-team",
                 list: "/accounting/team",
+                show: "/accounting/team/:id",
                 meta: {
                   label: "Team",
                   icon: <Users size={16} />,
@@ -170,6 +172,7 @@ function App() {
                 <Route path="accounting/customers" element={<CustomersPage />} />
                 <Route path="accounting/customers/:id" element={<CustomerDetailsPage />} />
                 <Route path="accounting/team" element={<TeamPage />} />
+                <Route path="accounting/team/:id" element={<TeamMemberDetailsPage />} />
               </Route>
             </Routes>
 

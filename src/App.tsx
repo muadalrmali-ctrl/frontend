@@ -27,6 +27,7 @@ import { InventoryPage } from "./pages/inventory/list";
 import { InventoryDetailsPage } from "./pages/inventory/show";
 import { TeamPage } from "./pages/team/list";
 import { SalesPage } from "./pages/sales/list";
+import { SalesDetailsPage } from "./pages/sales/show";
 import { ReportsPage } from "./pages/reports/list";
 import { AccountingPage } from "./pages/accounting/list";
 import { LoginPage } from "./pages/login";
@@ -83,6 +84,7 @@ function App() {
               {
                 name: "sales",
                 list: "/sales",
+                show: "/sales/:id",
                 meta: {
                   label: "Sales",
                   icon: <DollarSign size={16} />,
@@ -162,6 +164,7 @@ function App() {
                 <Route path="inventory" element={<InventoryPage />} />
                 <Route path="inventory/:id" element={<InventoryDetailsPage />} />
                 <Route path="sales" element={<SalesPage />} />
+                <Route path="sales/:id" element={<SalesDetailsPage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="accounting" element={<AccountingPage />} />
                 <Route path="accounting/customers" element={<CustomersPage />} />

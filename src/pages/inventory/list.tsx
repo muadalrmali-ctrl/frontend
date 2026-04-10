@@ -45,6 +45,8 @@ type InventoryItem = {
   brand?: string | null;
   model?: string | null;
   quantity: number;
+  warehouseQuantity?: number;
+  totalQuantity?: number;
   minimumStock?: number | null;
   unitCost: string;
   sellingPrice?: string | null;
@@ -86,16 +88,17 @@ const initialForm: AddItemForm = {
 };
 
 const getStockStatus = (item: InventoryItem) => {
+  const displayedQuantity = item.totalQuantity ?? item.quantity;
   const minimumStock = item.minimumStock ?? DEFAULT_LOW_STOCK_THRESHOLD;
 
-  if (item.quantity <= 0) {
+  if (displayedQuantity <= 0) {
     return {
       label: "غير متوفرة",
       className: "border-red-200 bg-red-50 text-red-700",
     };
   }
 
-  if (item.quantity <= minimumStock) {
+  if (displayedQuantity <= minimumStock) {
     return {
       label: "منخفضة",
       className: "border-amber-200 bg-amber-50 text-amber-700",
@@ -515,7 +518,12 @@ function InventoryListView({
                   <TableCell>{item.code}</TableCell>
                   <TableCell>{getCategoryName(item, categoriesById)}</TableCell>
                   <TableCell>{item.brand || "غير محددة"}</TableCell>
-                  <TableCell>{item.quantity}</TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      <p className="font-medium">{item.totalQuantity ?? item.quantity}</p>
+                      <p className="text-xs text-muted-foreground">بالمخزن: {item.warehouseQuantity ?? item.quantity}</p>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     {formatPrice(item.sellingPrice ?? item.unitCost)}
                   </TableCell>
@@ -564,7 +572,8 @@ function InventoryBoxView({
             <CardContent className="grid gap-3 text-sm">
               <InfoRow label="الفئة" value={getCategoryName(item, categoriesById)} />
               <InfoRow label="الماركة" value={item.brand || "غير محددة"} />
-              <InfoRow label="الكمية" value={String(item.quantity)} />
+              <InfoRow label="الإجمالي" value={String(item.totalQuantity ?? item.quantity)} />
+              <InfoRow label="بالمخزن" value={String(item.warehouseQuantity ?? item.quantity)} />
               <InfoRow
                 label="السعر"
                 value={formatPrice(item.sellingPrice ?? item.unitCost)}

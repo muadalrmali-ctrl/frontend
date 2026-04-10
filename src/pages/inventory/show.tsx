@@ -35,6 +35,7 @@ type ProductDetails = {
   brand?: string | null;
   model?: string | null;
   quantity: number;
+  totalQuantity: number;
   warehouseQuantity: number;
   minimumStock?: number | null;
   unitCost: string;
@@ -280,8 +281,8 @@ export function InventoryDetailsPage() {
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold">{item?.name || "تفاصيل القطعة"}</h1>
             {item && (
-              <Badge variant="outline" className={getStockTone(item.warehouseQuantity, item.minimumStock)}>
-                الموجود بالمخزن: {item.warehouseQuantity}
+              <Badge variant="outline" className={getStockTone(item.totalQuantity, item.minimumStock)}>
+                إجمالي الكمية: {item.totalQuantity}
               </Badge>
             )}
           </div>
@@ -350,6 +351,7 @@ export function InventoryDetailsPage() {
               </CardHeader>
               <CardContent className="grid gap-4">
                 <div className="grid gap-4 sm:grid-cols-2">
+                  <SummaryCard icon={<Package className="size-5" />} label="إجمالي المتتبع" value={String(item.totalQuantity)} />
                   <SummaryCard icon={<Warehouse className="size-5" />} label="في المخزن" value={String(item.warehouseQuantity)} />
                   <SummaryCard icon={<Package className="size-5" />} label="مخصص للحالات" value={String(allocatedTotal)} />
                 </div>

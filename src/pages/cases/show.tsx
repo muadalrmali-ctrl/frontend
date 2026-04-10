@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import { useList, useNotification } from "@refinedev/core";
+import { useGetIdentity, useList, useNotification } from "@refinedev/core";
 import { useNavigate, useParams } from "react-router";
 import {
   ArrowRight,
@@ -87,6 +87,8 @@ type CaseData = {
   latestMessage?: string | null;
   latestMessageChannel?: string | null;
   latestMessageSentAt?: string | null;
+  customerApprovedAt?: string | null;
+  customerApprovedBy?: number | null;
   finalResult?: string | null;
   postRepairCompletedWork?: string | null;
   postRepairTested?: boolean;
@@ -109,9 +111,27 @@ type CaseData = {
 type Customer = { id: number; name: string; phone: string; address?: string | null };
 type Device = { id: number; applianceType: string; brand: string; modelName: string; modelCode?: string | null; notes?: string | null };
 type UserSummary = { id: number; name: string; email: string };
-type CaseHistory = { id: number; toStatus: string; notes?: string | null; createdAt?: string | null };
+type CurrentUser = UserSummary & { role: string };
+type CaseHistory = { id: number; toStatus: string; notes?: string | null; createdAt?: string | null; actorName?: string | null; actorRole?: string | null };
 type InventoryItem = { id: number; name: string; code: string; quantity?: number; sellingPrice?: string | null; unitCost?: string | null; imageUrl?: string | null };
-type CasePart = { id: number; quantity: number; unitPrice: string; totalPrice: string; inventoryName?: string | null; inventoryCode?: string | null; inventoryImageUrl?: string | null };
+type CasePart = {
+  id: number;
+  quantity: number;
+  unitPrice: string;
+  totalPrice: string;
+  handoffStatus?: string;
+  deliveredAt?: string | null;
+  deliveredBy?: number | null;
+  deliveredByName?: string | null;
+  receivedAt?: string | null;
+  receivedBy?: number | null;
+  receivedByName?: string | null;
+  returnedAt?: string | null;
+  consumedAt?: string | null;
+  inventoryName?: string | null;
+  inventoryCode?: string | null;
+  inventoryImageUrl?: string | null;
+};
 type CaseService = { id: number; serviceName: string; quantity: number; unitPrice: string; totalPrice: string };
 type ReadyMediaOption = {
   id: string;
@@ -124,7 +144,7 @@ const statusLabels: Record<string, string> = {
   received: "حالة جديدة",
   waiting_part: "بانتظار القطعة",
   diagnosing: "قيد التشخيص",
-  waiting_approval: "بانتظار الموافقة",
+  waiting_approval: "بانتظار الموافقة وتسليم القطعة",
   in_progress: "قيد التنفيذ",
   repaired: "تم الإصلاح",
   not_repairable: "لا يمكن إصلاحها",
@@ -282,6 +302,22 @@ const parseImageList = (value?: string | null) => {
 
 const stringifyImageList = (images: string[]) => JSON.stringify(images);
 const isPublicMediaUrl = (value: string) => /^https?:\/\//i.test(value.trim());
+const isPartReadyForExecution = (part: CasePart) => ["received", "consumed", "returned"].includes(part.handoffStatus || "pending");
+const getTimelineLabel = (entry: CaseHistory) => {
+  const note = entry.notes || "";
+  if (note.includes("Customer approved")) return "موافقة العميل";
+  if (note.includes("Part delivered:")) return "تم تسليم القطعة";
+  if (note.includes("Part received:")) return "تم استلام القطعة";
+  if (entry.toStatus === "in_progress") return "بدء التنفيذ";
+  if (entry.toStatus === "repaired") return "اكتمال الإصلاح";
+  if (entry.toStatus === "completed") return "إقفال العملية";
+  return statusLabels[entry.toStatus] || "حدث على الحالة";
+};
+const getTimelinePartName = (entry: CaseHistory) => {
+  const note = entry.notes || "";
+  const parts = note.split(":");
+  return parts.length > 1 ? parts.slice(1).join(":").trim() : null;
+};
 
 export function CaseDetailsPage() {
   const { id } = useParams();
@@ -350,9 +386,10 @@ export function CaseDetailsPage() {
       {details && (
         <>
           <BasicCaseInfo details={details} />
+          <CaseActivityTimeline history={details.history} />
           {status === "waiting_part" && <WaitingPartSection details={details} onSaved={loadDetails} />}
           {status === "diagnosing" && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
-          {status === "waiting_approval" && <WaitingApprovalSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
+          {status === "waiting_approval" && <WaitingApprovalAndHandoffSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "in_progress" && <ExecutionSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "repaired" && <RepairedSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "not_repairable" && <NotRepairableSection details={details} onSaved={loadDetails} />}
@@ -400,6 +437,50 @@ function BasicCaseInfo({ details }: { details: CaseDetailsResponse }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+function CaseActivityTimeline({ history }: { history: CaseHistory[] }) {
+  if (!history.length) {
+    return null;
+  }
+
+  const orderedHistory = [...history].sort(
+    (left, right) =>
+      new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime()
+  );
+
+  return (
+    <Card className="rounded-lg">
+      <CardHeader>
+        <CardTitle>سجل النشاط</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3">
+        {orderedHistory.map((entry) => {
+          const partName = getTimelinePartName(entry);
+          return (
+            <div key={entry.id} className="rounded-xl border bg-muted/20 p-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div className="space-y-1">
+                  <p className="font-semibold">{getTimelineLabel(entry)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {entry.actorName || "مستخدم النظام"} • {formatDate(entry.createdAt)}
+                  </p>
+                </div>
+                {partName && (
+                  <Badge variant="outline" className="w-fit">
+                    {partName}
+                  </Badge>
+                )}
+              </div>
+              {entry.notes && !partName && (
+                <p className="mt-2 text-sm text-muted-foreground">{entry.notes}</p>
+              )}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -916,6 +997,204 @@ function WaitingApprovalSection({ details, parts, services, onSaved }: { details
       </AlertDialog>
       {isEditingInvoice && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={onSaved} />}
       {showExecutionPrep && <ExecutionPreparationSection details={details} onSaved={onSaved} />}
+    </div>
+  );
+}
+
+function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
+  const { open } = useNotification();
+  const { data: currentUser } = useGetIdentity<CurrentUser>();
+  const [isEditingInvoice, setIsEditingInvoice] = useState(false);
+  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
+  const [pendingPartActionId, setPendingPartActionId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { invoiceTotal } = getInvoiceTotals(parts, services);
+  const rejectionReason = "Customer rejected repair after diagnosis";
+  const approvalConfirmed = Boolean(details.caseData.customerApprovedAt);
+  const hasCaseParts = parts.length > 0;
+  const allPartsReceived = parts.every(isPartReadyForExecution);
+  const canStartExecution = approvalConfirmed && (!hasCaseParts || allPartsReceived);
+  const canDeliver = currentUser?.role === "store_manager";
+  const canReceive = currentUser?.role === "technician" || currentUser?.role === "technician_manager";
+
+  const resendMessage = async () => {
+    setError(null);
+    try {
+      const message =
+        details.caseData.latestMessage ||
+        buildDiagnosisMessage(details, formatMoney(invoiceTotal), "غير محدد", getDiagnosisText(details.caseData));
+      await apiClient(`/api/cases/${details.caseData.id}`, {
+        method: "PATCH",
+        body: {
+          latestMessage: message,
+          latestMessageChannel: details.caseData.latestMessageChannel || "WhatsApp",
+          latestMessageSentAt: new Date().toISOString(),
+        },
+      });
+      open?.({ type: "success", message: "تم إرسال الرسالة", description: "تم تحديث رسالة الموافقة للعميل." });
+      await onSaved();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "تعذر إعادة الإرسال");
+    }
+  };
+
+  const rejectDiagnosis = async () => {
+    setError(null);
+    setIsRejecting(true);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/status`, {
+        method: "PATCH",
+        body: {
+          toStatus: "not_repairable",
+          notes: rejectionReason,
+          finalResult: rejectionReason,
+        },
+      });
+      open?.({
+        type: "success",
+        message: "تم تسجيل الرفض",
+        description: "تم نقل الحالة إلى لا يمكن إصلاحها بعد رفض العميل المتابعة.",
+      });
+      setIsRejectDialogOpen(false);
+      await onSaved();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "تعذر تسجيل رفض العميل");
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
+  const confirmApproval = async () => {
+    setError(null);
+    setIsApproving(true);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/approval/confirm`, {
+        method: "PATCH",
+      });
+      open?.({
+        type: "success",
+        message: "تم تسجيل الموافقة",
+        description: "تم تثبيت موافقة العميل وفتح مرحلة تسليم القطعة.",
+      });
+      await onSaved();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "تعذر تسجيل الموافقة");
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  const handlePartAction = async (partId: number, action: "deliver" | "receive") => {
+    setError(null);
+    setPendingPartActionId(partId);
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/parts/${partId}/${action}`, {
+        method: "PATCH",
+      });
+      open?.({
+        type: "success",
+        message: action === "deliver" ? "تم تسليم القطعة" : "تم استلام القطعة",
+        description: action === "deliver" ? "تم نقل القطعة من المخزن إلى الحالة." : "تم تأكيد استلام الفني للقطعة.",
+      });
+      await onSaved();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "تعذر تحديث حالة القطعة");
+    } finally {
+      setPendingPartActionId(null);
+    }
+  };
+
+  return (
+    <div className="grid gap-6">
+      <Card className="rounded-lg">
+        <CardHeader><CardTitle>الفاتورة والموافقة</CardTitle></CardHeader>
+        <CardContent className="grid gap-5">
+          {error && <ErrorMessage message={error} />}
+          <InvoicePreview parts={parts} services={services} />
+          <Info label="آخر رسالة مرسلة" value={details.caseData.latestMessage || "لم يتم حفظ رسالة بعد"} />
+          <Info
+            label="حالة موافقة العميل"
+            value={approvalConfirmed ? `تمت الموافقة في ${formatDate(details.caseData.customerApprovedAt)}` : "بانتظار موافقة العميل"}
+          />
+          <div className="flex flex-wrap gap-3">
+            <Button type="button" variant="outline" onClick={() => setIsEditingInvoice((value) => !value)}>تعديل الفاتورة</Button>
+            <Button type="button" variant="outline" onClick={resendMessage}><RotateCcw /> إعادة الإرسال</Button>
+            <Button type="button" variant="outline" onClick={() => setIsRejectDialogOpen(true)}>رفض العميل</Button>
+            <Button type="button" onClick={confirmApproval} disabled={approvalConfirmed || isApproving}>
+              <CheckCircle2 />
+              {approvalConfirmed ? "تمت الموافقة" : isApproving ? "جارٍ الحفظ..." : "تمت الموافقة"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      <AlertDialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد رفض العميل</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم نقل الحالة إلى "لا يمكن إصلاحها" باستخدام سبب افتراضي: "Customer rejected repair after diagnosis".
+              يمكن تعديل السبب لاحقاً من تفاصيل الحالة قبل إنهاء العملية.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRejecting}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={rejectDiagnosis} disabled={isRejecting}>
+              {isRejecting ? "جارٍ التنفيذ..." : "تأكيد الرفض"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {isEditingInvoice && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={onSaved} />}
+      {approvalConfirmed && (
+        <Card className="rounded-lg border-primary/20">
+          <CardHeader><CardTitle>تسليم القطع واستلامها</CardTitle></CardHeader>
+          <CardContent className="grid gap-4">
+            <p className="text-sm text-muted-foreground">
+              بعد موافقة العميل، يسجل مسؤول المخزن تسليم القطع للحالة ثم يؤكد الفني الاستلام. أول ما تكتمل هذه الخطوة سيظهر نموذج بدء التنفيذ الحالي.
+            </p>
+            {parts.length === 0 ? (
+              <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+                لا توجد قطع مرتبطة بالفاتورة حالياً، ويمكن الانتقال مباشرة إلى تجهيز التنفيذ.
+              </div>
+            ) : (
+              parts.map((part) => (
+                <div key={part.id} className="rounded-xl border bg-muted/20 p-4">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="space-y-1">
+                      <p className="font-semibold">{part.inventoryName || "قطعة غير مسماة"}</p>
+                      <p className="text-sm text-muted-foreground">
+                        الكمية: {part.quantity} • الكود: {part.inventoryCode || "-"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        الحالة: {part.handoffStatus === "received" ? "تم الاستلام" : part.handoffStatus === "delivered" ? "تم التسليم" : part.handoffStatus === "consumed" ? "تم الاستهلاك" : "بانتظار التسليم"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {canDeliver && part.handoffStatus === "pending" && (
+                        <Button type="button" onClick={() => handlePartAction(part.id, "deliver")} disabled={pendingPartActionId === part.id}>
+                          تم التسليم
+                        </Button>
+                      )}
+                      {canReceive && part.handoffStatus === "delivered" && (
+                        <Button type="button" variant="secondary" onClick={() => handlePartAction(part.id, "receive")} disabled={pendingPartActionId === part.id}>
+                          تم الاستلام
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    <Info label="بيان التسليم" value={part.deliveredAt ? `${part.deliveredByName || "مسؤول المخزن"} • ${formatDate(part.deliveredAt)}` : "لم يتم التسليم بعد"} />
+                    <Info label="بيان الاستلام" value={part.receivedAt ? `${part.receivedByName || "الفني"} • ${formatDate(part.receivedAt)}` : "لم يتم الاستلام بعد"} />
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      )}
+      {canStartExecution && <ExecutionPreparationSection details={details} onSaved={onSaved} />}
     </div>
   );
 }

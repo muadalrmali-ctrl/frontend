@@ -77,11 +77,16 @@ const WORKFLOW_COLUMNS: WorkflowColumn[] = [
   },
 ];
 
+const waitingApprovalColumn = WORKFLOW_COLUMNS.find((column) => column.key === "waiting_approval");
+if (waitingApprovalColumn) {
+  waitingApprovalColumn.label = "بانتظار الموافقة وتسليم القطعة";
+}
+
 const ALLOWED_BOARD_TRANSITIONS: Record<string, string[]> = {
   received: ["waiting_part", "diagnosing", "not_repairable"],
   waiting_part: ["received", "diagnosing", "not_repairable"],
   diagnosing: ["waiting_part", "waiting_approval", "not_repairable"],
-  waiting_approval: ["diagnosing", "in_progress", "not_repairable"],
+  waiting_approval: ["diagnosing", "not_repairable"],
   in_progress: ["repaired", "not_repairable"],
   repaired: [],
   not_repairable: ["diagnosing", "waiting_part"],

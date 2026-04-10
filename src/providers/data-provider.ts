@@ -69,6 +69,8 @@ const endpoints: Record<string, ResourceEndpoint> = {
     list: "/api/inventory/items",
     show: (id) => `/api/inventory/items/${id}`,
     create: "/api/inventory/items",
+    update: (id) => `/api/inventory/items/${id}`,
+    delete: (id) => `/api/inventory/items/${id}`,
   },
   "inventory-categories": {
     list: "/api/inventory/categories",

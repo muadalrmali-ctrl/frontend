@@ -47,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { MAX_CASE_MEDIA_FILE_BYTES, uploadCaseImageFile } from "@/lib/case-media-upload";
 import { apiClient } from "@/providers/api-client";
 
 type CaseDetailsResponse = {
@@ -130,7 +131,7 @@ const statusLabels: Record<string, string> = {
 };
 
 const channelLabels = ["WhatsApp", "Email", "SMS", "other"];
-const MAX_INLINE_IMAGE_BYTES = 900_000;
+const MAX_INLINE_IMAGE_BYTES = MAX_CASE_MEDIA_FILE_BYTES;
 
 const formatDate = (value?: string | null) => {
   if (!value) return "غير محدد";
@@ -429,6 +430,24 @@ function WaitingPartSection({ details, onSaved }: { details: CaseDetailsResponse
     reader.readAsDataURL(file);
   };
 
+  const handleSupabaseImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    uploadCaseImageFile({
+      caseId: details.caseData.id,
+      mediaCategory: "waiting_part",
+      file,
+    })
+      .then((uploadedMedia) => {
+        setImageUrl(uploadedMedia.publicUrl);
+        setError(null);
+      })
+      .catch((error) => {
+        setError(error instanceof Error ? error.message : "ØªØ¹Ø°Ø± Ø±ÙØ¹ Ø§Ù„ØµÙˆØ±Ø© Ù…Ù† Ø§Ù„Ø¬Ù‡Ø§Ø².");
+      });
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -476,7 +495,7 @@ function WaitingPartSection({ details, onSaved }: { details: CaseDetailsResponse
           <div className="grid gap-4 rounded-lg border bg-muted/10 p-4 md:grid-cols-[220px_1fr]">
             <ImageBox imageUrl={previewImageUrl} label={selectedItem?.name || manualName || "صورة القطعة"} />
             <div className="grid content-center gap-3">
-              <Field label="رفع صورة من الجهاز"><Input type="file" accept="image/*" onChange={handleImageUpload} /></Field>
+              <Field label="رفع صورة من الجهاز"><Input type="file" accept="image/*" onChange={handleSupabaseImageUpload} /></Field>
               <Field label="أو رابط صورة اختياري"><Input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder="https://..." /></Field>
               <p className="text-sm text-muted-foreground">التخزين الحالي يحفظ صورة صغيرة أو رابط صورة. يمكن ربطه لاحقا بتخزين خارجي بدون تغيير شكل البيانات.</p>
             </div>
@@ -1274,6 +1293,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
   const [isReadyMessageDirty, setIsReadyMessageDirty] = useState(false);
   const [isSendingReady, setIsSendingReady] = useState(false);
   const [selectedReadyMediaUrls, setSelectedReadyMediaUrls] = useState<string[]>([]);
+  const [isUploadingRepairMedia, setIsUploadingRepairMedia] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const customerName = details.customer?.name || "العميل";
   const customerPhone = details.customer?.phone || "";
@@ -1342,6 +1362,54 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         setError(null);
       })
       .catch((error) => setError(error instanceof Error ? error.message : "تعذر رفع الصور"));
+  };
+
+  const uploadImagesToSupabase = async (
+    event: ChangeEvent<HTMLInputElement>,
+    setter: (images: string[]) => void,
+    current: string[],
+    mediaCategory: "post_repair" | "damaged_part",
+    fieldName: "postRepairImages" | "postRepairDamagedPartImages"
+  ) => {
+    const files = Array.from(event.target.files ?? []).slice(0, 4 - current.length);
+    if (files.length === 0) return;
+
+    if (files.some((file) => file.size > MAX_CASE_MEDIA_FILE_BYTES)) {
+      setError("Ø¥Ø­Ø¯Ù‰ Ø§Ù„ØµÙˆØ± ÙƒØ¨ÙŠØ±Ø©. Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ 5 Ù…ÙŠØ¬Ø§Ø¨Ø§ÙŠØª Ù„ÙƒÙ„ Ù…Ù„Ù.");
+      return;
+    }
+
+    setIsUploadingRepairMedia(true);
+
+    try {
+      const uploadedImages: string[] = [];
+
+      for (const file of files) {
+        const uploadedMedia = await uploadCaseImageFile({
+          caseId: details.caseData.id,
+          mediaCategory,
+          file,
+        });
+        uploadedImages.push(uploadedMedia.publicUrl);
+      }
+
+      const nextImages = [...current, ...uploadedImages].slice(0, 4);
+
+      await apiClient(`/api/cases/${details.caseData.id}`, {
+        method: "PATCH",
+        body: {
+          [fieldName]: stringifyImageList(nextImages),
+        },
+      });
+
+      setter(nextImages);
+      setError(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "ØªØ¹Ø°Ø± Ø±ÙØ¹ Ø§Ù„ØµÙˆØ±");
+    } finally {
+      setIsUploadingRepairMedia(false);
+      event.target.value = "";
+    }
   };
 
   const buildQualityPayload = () => ({
@@ -1432,8 +1500,8 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         <Field label="عدد مرات الاختبار"><Input type="number" min="1" value={testCount} onChange={(event) => setTestCount(event.target.value)} /></Field>
         <label className="flex items-center gap-2 rounded-lg border p-3"><input type="checkbox" checked={cleaned} onChange={(event) => setCleaned(event.target.checked)} /> تم تنظيف الجهاز</label>
         <Field label="نصائح فنية للعميل"><Textarea value={recommendations} onChange={(event) => setRecommendations(event.target.value)} /></Field>
-        <ImageUploadGrid label="صور الجهاز بعد الإصلاح" images={repairImages} onUpload={(event) => uploadImages(event, setRepairImages, repairImages)} />
-        <ImageUploadGrid label="القطعة المعطوبة" images={damagedPartImages} onUpload={(event) => uploadImages(event, setDamagedPartImages, damagedPartImages)} />
+        <ImageUploadGrid label="صور الجهاز بعد الإصلاح" images={repairImages} onUpload={(event) => uploadImagesToSupabase(event, setRepairImages, repairImages, "post_repair", "postRepairImages")} uploading={isUploadingRepairMedia} />
+        <ImageUploadGrid label="القطعة المعطوبة" images={damagedPartImages} onUpload={(event) => uploadImagesToSupabase(event, setDamagedPartImages, damagedPartImages, "damaged_part", "postRepairDamagedPartImages")} uploading={isUploadingRepairMedia} />
         <Field label="ملاحظة"><Textarea value={note} onChange={(event) => setNote(event.target.value)} /></Field>
       </CardContent>
     </Card>
@@ -1663,17 +1731,19 @@ function EditableInvoicePreview({
 function ImageUploadGrid({
   label,
   images,
+  uploading,
   onUpload,
 }: {
   label: string;
   images: string[];
+  uploading?: boolean;
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
     <div className="grid gap-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Label>{label}</Label>
-        <Input className="max-w-sm" type="file" accept="image/*" multiple onChange={onUpload} />
+        <Input className="max-w-sm" type="file" accept="image/*" multiple onChange={onUpload} disabled={uploading} />
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {images.length === 0 ? (
@@ -1710,3 +1780,4 @@ function ImageBox({ imageUrl, label, small }: { imageUrl?: string | null; label:
     </div>
   );
 }
+

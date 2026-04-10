@@ -144,7 +144,7 @@ const statusLabels: Record<string, string> = {
   received: "حالة جديدة",
   waiting_part: "بانتظار القطعة",
   diagnosing: "قيد التشخيص",
-  waiting_approval: "بانتظار الموافقة وتسليم القطعة",
+  waiting_approval: "بانتظار موافقة وتسجيل استلام قطعة غيار",
   in_progress: "قيد التنفيذ",
   repaired: "تم الإصلاح",
   not_repairable: "لا يمكن إصلاحها",
@@ -386,13 +386,13 @@ export function CaseDetailsPage() {
       {details && (
         <>
           <BasicCaseInfo details={details} />
-          <CaseActivityTimeline history={details.history} />
           {status === "waiting_part" && <WaitingPartSection details={details} onSaved={loadDetails} />}
           {status === "diagnosing" && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "waiting_approval" && <WaitingApprovalAndHandoffSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "in_progress" && <ExecutionSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "repaired" && <RepairedSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "not_repairable" && <NotRepairableSection details={details} onSaved={loadDetails} />}
+          <CaseActivityTimeline history={details.history} />
         </>
       )}
     </section>
@@ -1016,8 +1016,11 @@ function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }:
   const hasCaseParts = parts.length > 0;
   const allPartsReceived = parts.every(isPartReadyForExecution);
   const canStartExecution = approvalConfirmed && (!hasCaseParts || allPartsReceived);
-  const canDeliver = currentUser?.role === "store_manager";
-  const canReceive = currentUser?.role === "technician" || currentUser?.role === "technician_manager";
+  const canDeliver = currentUser?.role === "store_manager" || currentUser?.role === "admin";
+  const canReceive =
+    currentUser?.role === "technician" ||
+    currentUser?.role === "technician_manager" ||
+    currentUser?.role === "admin";
 
   const resendMessage = async () => {
     setError(null);

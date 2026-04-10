@@ -79,7 +79,7 @@ const WORKFLOW_COLUMNS: WorkflowColumn[] = [
 
 const waitingApprovalColumn = WORKFLOW_COLUMNS.find((column) => column.key === "waiting_approval");
 if (waitingApprovalColumn) {
-  waitingApprovalColumn.label = "بانتظار الموافقة وتسليم القطعة";
+  waitingApprovalColumn.label = "بانتظار موافقة وتسجيل استلام قطعة غيار";
 }
 
 const ALLOWED_BOARD_TRANSITIONS: Record<string, string[]> = {

@@ -1326,6 +1326,13 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
       ),
     [customerName, details.caseData.caseCode, pickupNote, readyFinalCost, readySummary]
   );
+  const orderedSelectedReadyMediaUrls = useMemo(
+    () =>
+      availableReadyMedia
+        .filter((item) => selectedReadyMediaUrls.includes(item.imageUrl))
+        .map((item) => item.imageUrl),
+    [availableReadyMedia, selectedReadyMediaUrls]
+  );
 
   useEffect(() => {
     if (!isReadyDialogOpen) return;
@@ -1436,7 +1443,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         body: {
           readyNotificationMessage: readyMessage || generatedReadyMessage,
           readyNotificationChannel: readyChannel,
-          mediaUrls: selectedReadyMediaUrls,
+          mediaUrls: orderedSelectedReadyMediaUrls,
         },
       });
       open?.({ type: "success", message: "تم إرسال الرسالة", description: "تم إرسال إشعار الجاهزية للعميل." });

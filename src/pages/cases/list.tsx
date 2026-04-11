@@ -175,8 +175,8 @@ export function CasesPage() {
   };
 
   return (
-    <section className="space-y-6" dir="rtl">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="page-shell" dir="rtl">
+      <div className="page-hero flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold">الحالات</h1>
           <p className="text-muted-foreground">
@@ -205,8 +205,8 @@ export function CasesPage() {
         </p>
       )}
       {!query.isLoading && !query.error && (
-        <Card className="overflow-hidden rounded-lg border bg-card/95">
-          <CardHeader className="border-b">
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b border-border/60">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <CardTitle className="text-xl">لوحة سير العمل</CardTitle>

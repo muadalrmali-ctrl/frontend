@@ -13,7 +13,7 @@ import {
   useLogout,
   useRefineOptions,
 } from "@refinedev/core";
-import { LogOutIcon } from "lucide-react";
+import { Bell, LogOutIcon, Sparkles } from "lucide-react";
 
 export const Header = () => {
   const { isMobile } = useSidebar();
@@ -22,26 +22,48 @@ export const Header = () => {
 };
 
 function DesktopHeader() {
+  const { title } = useRefineOptions();
+
   return (
     <header
       className={cn(
         "sticky",
         "top-0",
         "flex",
-        "h-16",
+        "h-20",
         "shrink-0",
         "items-center",
         "gap-4",
-        "border-b",
-        "border-border",
-        "bg-sidebar",
-        "pr-3",
-        "justify-end",
+        "justify-between",
         "z-40"
       )}
     >
-      <ThemeToggle />
-      <UserDropdown />
+      <div className="glass-panel flex items-center gap-3 rounded-[1.7rem] px-4 py-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+          {title.icon}
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs font-bold uppercase tracking-[0.24em] text-primary/70">
+            Maintenance Center
+          </p>
+          <h2 className="text-lg font-black text-foreground">{title.text}</h2>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <div className="glass-panel hidden items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-muted-foreground lg:flex">
+          <Sparkles className="size-4 text-violet-500" />
+          واجهة تشغيل أكثر حيوية ووضوحًا
+        </div>
+        <button
+          type="button"
+          className="glass-panel inline-flex h-12 w-12 items-center justify-center rounded-2xl text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Bell className="size-5" />
+        </button>
+        <ThemeToggle />
+        <UserDropdown />
+      </div>
     </header>
   );
 }
@@ -57,20 +79,17 @@ function MobileHeader() {
         "sticky",
         "top-0",
         "flex",
-        "h-12",
+        "h-16",
         "shrink-0",
         "items-center",
         "gap-2",
-        "border-b",
-        "border-border",
-        "bg-sidebar",
-        "pr-3",
+        "px-2",
         "justify-between",
         "z-40"
       )}
     >
       <SidebarTrigger
-        className={cn("text-muted-foreground", "rotate-180", "ml-1", {
+        className={cn("glass-panel text-muted-foreground rotate-180 rounded-2xl", "ml-1", {
           "opacity-0": open,
           "opacity-100": !open || isMobile,
           "pointer-events-auto": !open || isMobile,
@@ -80,26 +99,26 @@ function MobileHeader() {
 
       <div
         className={cn(
-          "whitespace-nowrap",
+          "glass-panel whitespace-nowrap",
           "flex",
           "flex-row",
-          "h-full",
+          "h-12",
           "items-center",
           "justify-start",
           "gap-2",
+          "rounded-[1.35rem]",
+          "px-3",
           "transition-discrete",
           "duration-200",
-          {
-            "pl-3": !open,
-            "pl-5": open,
-          }
+          "max-w-[calc(100vw-8.5rem)]"
         )}
       >
-        <div>{title.icon}</div>
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+          {title.icon}
+        </div>
         <h2
           className={cn(
-            "text-sm",
-            "font-bold",
+            "text-sm font-black",
             "transition-opacity",
             "duration-200",
             {
@@ -112,7 +131,7 @@ function MobileHeader() {
         </h2>
       </div>
 
-      <ThemeToggle className={cn("h-8", "w-8")} />
+      <ThemeToggle className={cn("glass-panel h-10 w-10 rounded-2xl")} />
     </header>
   );
 }

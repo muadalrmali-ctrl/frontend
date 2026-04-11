@@ -17,21 +17,25 @@ export function Layout() {
           <main
             className={cn(
               "@container/main",
-              "container",
-              "mx-auto",
               "relative",
               "w-full",
               "flex",
               "flex-col",
               "flex-1",
-              "px-2",
-              "pt-4",
-              "md:p-4",
-              "lg:px-6",
-              "lg:pt-6"
+              "overflow-hidden",
+              "px-3",
+              "pb-8",
+              "pt-5",
+              "md:px-5",
+              "md:pt-6",
+              "lg:px-7",
+              "lg:pt-7"
             )}
           >
-            <Outlet />
+            <div className="app-grid absolute inset-x-0 top-0 -z-10 h-80 rounded-[2.5rem] opacity-50" />
+            <div className="mx-auto flex w-full max-w-[1700px] flex-1 flex-col">
+              <Outlet />
+            </div>
           </main>
         </SidebarInset>
       </SidebarProvider>

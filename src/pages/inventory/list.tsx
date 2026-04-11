@@ -249,8 +249,8 @@ export function InventoryPage() {
   };
 
   return (
-    <section className="space-y-6" dir="rtl">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <section className="page-shell" dir="rtl">
+      <div className="page-hero flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-3xl font-semibold">المخزون</h1>
           <p className="text-muted-foreground">
@@ -285,7 +285,7 @@ export function InventoryPage() {
         </div>
       </div>
 
-      <Card className="rounded-lg">
+      <Card>
         <CardContent className="p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative w-full lg:max-w-xl">

@@ -293,8 +293,8 @@ export function ReportsPage() {
   };
 
   return (
-    <section className="space-y-6" dir="rtl">
-      <div className="space-y-2">
+    <section className="page-shell" dir="rtl">
+      <div className="page-hero space-y-2">
         <h1 className="text-3xl font-semibold">التقارير</h1>
         <p className="text-muted-foreground">
           مركز موحد لتقارير الحالات والفنيين والمخزون والمبيعات والعملاء وسير العمل، مع تصدير PDF وExcel.

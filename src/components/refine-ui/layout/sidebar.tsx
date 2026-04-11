@@ -35,23 +35,28 @@ export function Sidebar() {
   const { menuItems, selectedKey } = useMenu();
 
   return (
-    <ShadcnSidebar collapsible="icon" className={cn("border-none")}>
+    <ShadcnSidebar
+      collapsible="icon"
+      className={cn("border-none bg-transparent")}
+    >
       <ShadcnSidebarRail />
       <SidebarHeader />
       <ShadcnSidebarContent
         className={cn(
+          "glass-panel",
           "transition-discrete",
           "duration-200",
           "flex",
           "flex-col",
           "gap-2",
-          "pt-2",
-          "pb-2",
-          "border-r",
-          "border-border",
+          "rounded-[2rem]",
+          "pt-3",
+          "pb-3",
+          "mx-2",
+          "mb-3",
           {
             "px-3": open,
-            "px-1": !open,
+            "px-2": !open,
           }
         )}
       >
@@ -94,15 +99,15 @@ function SidebarItemGroup({ item, selectedKey }: MenuItemProps) {
   const { open } = useShadcnSidebar();
 
   return (
-    <div className={cn("border-t", "border-sidebar-border", "pt-4")}>
+    <div className={cn("border-t", "border-sidebar-border/80", "pt-4")}>
       <span
         className={cn(
           "ml-3",
           "block",
           "text-xs",
-          "font-semibold",
+          "font-bold",
           "uppercase",
-          "text-muted-foreground",
+          "text-primary/65",
           "transition-all",
           "duration-200",
           {
@@ -191,6 +196,7 @@ function SidebarItemDropdown({ item, selectedKey }: MenuItemProps) {
               >
                 <ItemIcon
                   icon={child.meta?.icon ?? child.icon}
+                  itemName={child.name}
                   isSelected={isSelected}
                 />
                 <span>{getDisplayName(child)}</span>
@@ -216,10 +222,8 @@ function SidebarHeader() {
   return (
     <ShadcnSidebarHeader
       className={cn(
-        "p-0",
-        "h-16",
-        "border-b",
-        "border-border",
+        "p-2",
+        "h-20",
         "flex-row",
         "items-center",
         "justify-between",
@@ -228,26 +232,29 @@ function SidebarHeader() {
     >
       <div
         className={cn(
-          "whitespace-nowrap",
+          "glass-panel whitespace-nowrap",
           "flex",
           "flex-row",
-          "h-full",
+          "h-16",
           "items-center",
           "justify-start",
           "gap-2",
+          "rounded-[1.8rem]",
+          "px-3",
           "transition-discrete",
           "duration-200",
           {
-            "pl-3": !open,
-            "pl-5": open,
+            "w-[calc(100%-3.5rem)]": open,
+            "w-[3.4rem]": !open,
           }
         )}
       >
-        <div>{title.icon}</div>
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+          {title.icon}
+        </div>
         <h2
           className={cn(
-            "text-sm",
-            "font-bold",
+            "text-sm font-black",
             "transition-opacity",
             "duration-200",
             {
@@ -261,7 +268,7 @@ function SidebarHeader() {
       </div>
 
       <ShadcnSidebarTrigger
-        className={cn("text-muted-foreground", "mr-1.5", {
+        className={cn("glass-panel text-muted-foreground mr-1.5 rounded-2xl", {
           "opacity-0": !open,
           "opacity-100": open || isMobile,
           "pointer-events-auto": open || isMobile,
@@ -278,16 +285,33 @@ function getDisplayName(item: TreeMenuItem) {
 
 type IconProps = {
   icon: React.ReactNode;
+  itemName?: string;
   isSelected?: boolean;
 };
 
-function ItemIcon({ icon, isSelected }: IconProps) {
+const ITEM_ICON_TONES: Record<string, string> = {
+  dashboard: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+  cases: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
+  "maintenance-operations": "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+  inventory: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  sales: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
+  reports: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
+  accounting: "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300",
+  "accounting-customers": "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300",
+  "accounting-team": "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300",
+};
+
+function ItemIcon({ icon, itemName, isSelected }: IconProps) {
+  const toneClass = isSelected
+    ? "bg-primary text-primary-foreground shadow-sm"
+    : ITEM_ICON_TONES[itemName || ""] || "bg-sidebar-accent text-sidebar-accent-foreground";
+
   return (
     <div
-      className={cn("w-4", {
-        "text-muted-foreground": !isSelected,
-        "text-sidebar-primary-foreground": isSelected,
-      })}
+      className={cn(
+        "flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-200",
+        toneClass
+      )}
     >
       {icon ?? <ListIcon />}
     </div>
@@ -315,16 +339,20 @@ function SidebarButton({
 
   const buttonContent = (
     <>
-      <ItemIcon icon={item.meta?.icon ?? item.icon} isSelected={isSelected} />
+      <ItemIcon
+        icon={item.meta?.icon ?? item.icon}
+        itemName={item.name}
+        isSelected={isSelected}
+      />
       <span
         className={cn("tracking-[-0.00875rem]", {
           "flex-1": rightIcon,
           "text-left": rightIcon,
           "line-clamp-1": !rightIcon,
           truncate: !rightIcon,
-          "font-normal": !isSelected,
-          "font-semibold": isSelected,
-          "text-sidebar-primary-foreground": isSelected,
+          "font-medium": !isSelected,
+          "font-bold": isSelected,
+          "text-sidebar-primary": isSelected,
           "text-foreground": !isSelected,
         })}
       >
@@ -339,13 +367,14 @@ function SidebarButton({
       asChild={!!(asLink && item.route)}
       variant="ghost"
       size="lg"
-      className={cn(
-        "flex w-full items-center justify-start gap-2 py-2 !px-3 text-sm",
+        className={cn(
+        "flex h-auto w-full items-center justify-start gap-3 rounded-2xl py-2.5 !px-3 text-sm",
         {
-          "bg-sidebar-primary": isSelected,
-          "hover:!bg-sidebar-primary/90": isSelected,
-          "text-sidebar-primary-foreground": isSelected,
-          "hover:text-sidebar-primary-foreground": isSelected,
+          "bg-sidebar-primary/12 text-sidebar-primary shadow-xs": isSelected,
+          "hover:!bg-sidebar-primary/16": isSelected,
+          "text-sidebar-primary": isSelected,
+          "hover:text-sidebar-primary": isSelected,
+          "hover:bg-sidebar-accent/80": !isSelected,
         },
         className
       )}

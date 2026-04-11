@@ -229,8 +229,8 @@ export function SalesPage() {
   };
 
   return (
-    <section className="space-y-6" dir="rtl">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+    <section className="page-shell" dir="rtl">
+      <div className="page-hero flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold">المبيعات</h1>
           <p className="text-muted-foreground">
@@ -251,7 +251,7 @@ export function SalesPage() {
         </div>
       </div>
 
-      <Card className="rounded-2xl border-border/70 bg-card/80">
+      <Card>
         <CardContent className="p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative w-full lg:max-w-xl">

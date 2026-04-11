@@ -29,6 +29,7 @@ import { TeamPage } from "./pages/team/list";
 import { TeamMemberDetailsPage } from "./pages/team/show";
 import { SalesPage } from "./pages/sales/list";
 import { SalesDetailsPage } from "./pages/sales/show";
+import { InvoicePreviewPage } from "./pages/invoices/preview";
 import { ReportsPage } from "./pages/reports/list";
 import { AccountingPage } from "./pages/accounting/list";
 import { LoginPage } from "./pages/login";
@@ -144,6 +145,14 @@ function App() {
                 }
               />
               <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+              <Route
+                path="/invoice-preview/:source/:id"
+                element={
+                  <Authenticated key="invoice-preview" redirectOnFail="/login">
+                    <InvoicePreviewPage />
+                  </Authenticated>
+                }
+              />
               <Route
                 element={
                   <Authenticated key="protected-routes" redirectOnFail="/login">

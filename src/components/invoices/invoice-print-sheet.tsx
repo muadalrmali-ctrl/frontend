@@ -1,3 +1,5 @@
+import type { CSSProperties, ReactNode } from "react";
+
 type InvoicePrintLineItem = {
   id: string;
   description: string;
@@ -26,6 +28,13 @@ type InvoicePrintSheetProps = {
 const formatMoney = (value: number) =>
   `${value.toLocaleString("ar-LY", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} د.ل`;
 
+const boxStyle: CSSProperties = {
+  border: "1px solid #d7dee7",
+  borderRadius: "14px",
+  padding: "14px 16px",
+  background: "#ffffff",
+};
+
 export function InvoicePrintSheet({
   invoiceCode,
   customerName,
@@ -43,76 +52,93 @@ export function InvoicePrintSheet({
 }: InvoicePrintSheetProps) {
   return (
     <div
-      className="w-[794px] bg-white p-10 font-sans text-slate-800"
       dir="rtl"
-      style={{ fontFamily: "Tahoma, Arial, sans-serif" }}
+      style={{
+        width: "100%",
+        maxWidth: "980px",
+        margin: "0 auto",
+        background: "#ffffff",
+        color: "#1f2937",
+        fontFamily: "Tahoma, Arial, sans-serif",
+        padding: "32px",
+        boxSizing: "border-box",
+      }}
     >
-      <div className="flex items-start justify-between border-b border-slate-200 pb-8">
-        <div className="space-y-2 text-right">
-          <h1 className="text-4xl font-bold tracking-tight text-slate-800">شركة الجهاد</h1>
-          <p className="text-lg text-slate-500">لاستيراد الأجهزة الكهرومنزلية | جملة وقطاعي</p>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: "24px",
+          borderBottom: "1px solid #d7dee7",
+          paddingBottom: "24px",
+        }}
+      >
+        <div style={{ textAlign: "right" }}>
+          <h1 style={{ margin: 0, fontSize: "36px", fontWeight: 700, color: "#111827" }}>شركة الجهاد</h1>
+          <p style={{ margin: "10px 0 0", fontSize: "17px", color: "#4b5563" }}>
+            لاستيراد الأجهزة الكهرومنزلية | جملة وقطاعي
+          </p>
         </div>
-        <div className="space-y-3 text-left">
-          <p className="text-sm font-medium uppercase tracking-[0.3em] text-slate-400">Invoice</p>
-          <p className="text-4xl font-semibold text-lime-600">{invoiceCode}</p>
-        </div>
-      </div>
-
-      <div className="mt-10 grid gap-8 md:grid-cols-2">
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm text-slate-400">العميل</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-800">{customerName}</p>
-            {customerPhone ? <p className="mt-1 text-base text-slate-500">{customerPhone}</p> : null}
-          </div>
-          {caseCode ? (
-            <div>
-              <p className="text-sm text-slate-400">رقم الحالة</p>
-              <p className="mt-1 text-lg font-medium text-slate-700">{caseCode}</p>
-            </div>
-          ) : null}
-          {deviceLabel ? (
-            <div>
-              <p className="text-sm text-slate-400">الجهاز</p>
-              <p className="mt-1 text-lg font-medium text-slate-700">{deviceLabel}</p>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="grid gap-4">
-          <MetaRow label="تاريخ الفاتورة" value={invoiceDate} />
-          <MetaRow label="الموظف" value={staffName || "غير محدد"} />
-          <MetaRow label="عدد البنود" value={String(items.length)} />
-          <MetaRow label="المرجع" value={invoiceCode} />
+        <div style={{ textAlign: "left" }}>
+          <p style={{ margin: 0, fontSize: "12px", letterSpacing: "0.25em", color: "#9ca3af", textTransform: "uppercase" }}>
+            Invoice
+          </p>
+          <p style={{ margin: "12px 0 0", fontSize: "34px", fontWeight: 700, color: "#2f6f2f" }}>{invoiceCode}</p>
         </div>
       </div>
 
-      <div className="mt-10 overflow-hidden rounded-2xl border border-slate-200">
-        <table className="w-full border-collapse text-right">
-          <thead className="bg-slate-100 text-sm text-slate-600">
-            <tr>
-              <th className="px-4 py-3 font-medium">الوصف</th>
-              <th className="px-4 py-3 font-medium">الكمية</th>
-              <th className="px-4 py-3 font-medium">سعر الوحدة</th>
-              <th className="px-4 py-3 font-medium">الضريبة</th>
-              <th className="px-4 py-3 font-medium">الإجمالي</th>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "18px",
+          marginTop: "26px",
+        }}
+      >
+        <div style={{ display: "grid", gap: "12px" }}>
+          <InfoBox label="العميل" value={customerName} />
+          {customerPhone ? <InfoBox label="الهاتف" value={customerPhone} /> : null}
+          {caseCode ? <InfoBox label="رقم الحالة" value={caseCode} /> : null}
+          {deviceLabel ? <InfoBox label="الجهاز" value={deviceLabel} /> : null}
+        </div>
+        <div style={{ display: "grid", gap: "12px" }}>
+          <InfoBox label="تاريخ الفاتورة" value={invoiceDate} />
+          <InfoBox label="الموظف" value={staffName || "غير محدد"} />
+          <InfoBox label="عدد البنود" value={String(items.length)} />
+          <InfoBox label="المرجع" value={invoiceCode} />
+        </div>
+      </div>
+
+      <div style={{ marginTop: "26px", border: "1px solid #d7dee7", borderRadius: "16px", overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "#f3f4f6", color: "#4b5563" }}>
+              <HeaderCell>الوصف</HeaderCell>
+              <HeaderCell>الكمية</HeaderCell>
+              <HeaderCell>سعر الوحدة</HeaderCell>
+              <HeaderCell>الضريبة</HeaderCell>
+              <HeaderCell>الإجمالي</HeaderCell>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-sm text-slate-500">
+                <td
+                  colSpan={5}
+                  style={{ padding: "22px 16px", textAlign: "center", color: "#6b7280", borderTop: "1px solid #e5e7eb" }}
+                >
                   لا توجد بنود مسجلة في هذه الفاتورة.
                 </td>
               </tr>
             ) : (
               items.map((item, index) => (
-                <tr key={item.id} className={index % 2 === 0 ? "bg-white" : "bg-slate-50/70"}>
-                  <td className="px-4 py-4 text-sm font-medium text-slate-700">{item.description}</td>
-                  <td className="px-4 py-4 text-sm text-slate-600">{item.quantity}</td>
-                  <td className="px-4 py-4 text-sm text-slate-600">{formatMoney(item.unitPrice)}</td>
-                  <td className="px-4 py-4 text-sm text-slate-600">{formatMoney(item.tax || 0)}</td>
-                  <td className="px-4 py-4 text-sm font-semibold text-slate-700">{formatMoney(item.total)}</td>
+                <tr key={item.id} style={{ background: index % 2 === 0 ? "#ffffff" : "#fafafa" }}>
+                  <BodyCell emphasized>{item.description}</BodyCell>
+                  <BodyCell>{String(item.quantity)}</BodyCell>
+                  <BodyCell>{formatMoney(item.unitPrice)}</BodyCell>
+                  <BodyCell>{formatMoney(item.tax || 0)}</BodyCell>
+                  <BodyCell emphasized>{formatMoney(item.total)}</BodyCell>
                 </tr>
               ))
             )}
@@ -120,41 +146,97 @@ export function InvoicePrintSheet({
         </table>
       </div>
 
-      <div className="mt-8 flex justify-end">
-        <div className="w-full max-w-sm space-y-3 rounded-2xl bg-slate-50 p-5">
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "24px" }}>
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "340px",
+            border: "1px solid #d7dee7",
+            borderRadius: "16px",
+            background: "#f9fafb",
+            padding: "18px 20px",
+            boxSizing: "border-box",
+          }}
+        >
           <SummaryRow label="الإجمالي الفرعي" value={formatMoney(subtotal)} />
           <SummaryRow label="الخصم" value={formatMoney(discount)} />
           <SummaryRow label="الضريبة" value={formatMoney(tax)} />
-          <div className="border-t border-slate-200 pt-3">
+          <div style={{ borderTop: "1px solid #d7dee7", marginTop: "12px", paddingTop: "12px" }}>
             <SummaryRow label="الإجمالي النهائي" value={formatMoney(total)} emphasized />
           </div>
         </div>
       </div>
 
-      <div className="mt-12 grid gap-6 md:grid-cols-[1.25fr_0.75fr]">
-        <div className="rounded-2xl border border-slate-200 p-5">
-          <h2 className="text-base font-semibold text-slate-800">ملاحظات وشروط</h2>
-          <ul className="mt-4 space-y-2 text-sm leading-7 text-slate-600">
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.3fr 0.7fr",
+          gap: "20px",
+          marginTop: "28px",
+        }}
+      >
+        <div style={{ ...boxStyle, minHeight: "150px" }}>
+          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "#111827" }}>ملاحظات وشروط</h2>
+          <ul style={{ margin: "14px 0 0", paddingInlineStart: "20px", color: "#4b5563", lineHeight: 1.9, fontSize: "14px" }}>
             <li>تخضع جميع السلع لشروطنا وأحكامنا.</li>
             <li>الضمان يشمل عيوب التصنيع ولا يشمل سوء الاستخدام أو الحوادث.</li>
             <li>{notes?.trim() || "يرجى الاحتفاظ بالفاتورة للمتابعة وخدمات ما بعد البيع."}</li>
           </ul>
         </div>
-        <div className="flex items-end justify-end">
-          <div className="rounded-2xl border border-dashed border-slate-300 px-6 py-8 text-center text-sm text-slate-400">
-            شكراً لتعاملكم معنا
-          </div>
+        <div
+          style={{
+            border: "1px dashed #c7ced8",
+            borderRadius: "16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "150px",
+            color: "#6b7280",
+            background: "#ffffff",
+            textAlign: "center",
+            padding: "18px",
+            boxSizing: "border-box",
+          }}
+        >
+          شكراً لتعاملكم معنا
         </div>
       </div>
     </div>
   );
 }
 
-function MetaRow({ label, value }: { label: string; value: string }) {
+function HeaderCell({ children }: { children: ReactNode }) {
+  return <th style={{ padding: "14px 16px", fontWeight: 700, fontSize: "14px", textAlign: "right" }}>{children}</th>;
+}
+
+function BodyCell({
+  children,
+  emphasized = false,
+}: {
+  children: ReactNode;
+  emphasized?: boolean;
+}) {
   return (
-    <div className="rounded-xl border border-slate-200 px-4 py-3">
-      <p className="text-sm text-slate-400">{label}</p>
-      <p className="mt-1 text-base font-medium text-slate-700">{value}</p>
+    <td
+      style={{
+        padding: "14px 16px",
+        borderTop: "1px solid #e5e7eb",
+        fontSize: "14px",
+        color: "#1f2937",
+        fontWeight: emphasized ? 700 : 500,
+        textAlign: "right",
+      }}
+    >
+      {children}
+    </td>
+  );
+}
+
+function InfoBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={boxStyle}>
+      <div style={{ fontSize: "13px", color: "#6b7280", marginBottom: "6px" }}>{label}</div>
+      <div style={{ fontSize: "16px", color: "#111827", fontWeight: 600 }}>{value}</div>
     </div>
   );
 }
@@ -169,9 +251,20 @@ function SummaryRow({
   emphasized?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className={emphasized ? "font-semibold text-slate-800" : "text-slate-500"}>{label}</span>
-      <span className={emphasized ? "text-lg font-bold text-lime-600" : "font-medium text-slate-700"}>{value}</span>
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "12px",
+        marginTop: "8px",
+        color: emphasized ? "#111827" : "#4b5563",
+        fontWeight: emphasized ? 700 : 500,
+        fontSize: emphasized ? "18px" : "15px",
+      }}
+    >
+      <span>{label}</span>
+      <span style={{ color: emphasized ? "#2f6f2f" : "#111827" }}>{value}</span>
     </div>
   );
 }

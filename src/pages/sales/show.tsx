@@ -1,12 +1,11 @@
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode } from "react";
 import { useGetIdentity, useNotification, useOne } from "@refinedev/core";
-import { ArrowRight, CheckCircle2, FileText, Package2, Printer } from "lucide-react";
+import { ArrowRight, CheckCircle2, FileText, Package2 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { apiClient } from "@/providers/api-client";
 
 type CurrentUser = {
@@ -106,7 +105,6 @@ export function SalesDetailsPage() {
 
   const details = saleQuery.result;
   const sale = details?.invoice;
-  const [isPrintingInvoice, setIsPrintingInvoice] = useState(false);
   const canConfirm = Boolean(
     sale &&
       sale.invoiceType === "direct_sale" &&
@@ -133,55 +131,6 @@ export function SalesDetailsPage() {
         message: "تعذر تأكيد البيع",
         description: error instanceof Error ? error.message : "حدث خطأ غير متوقع أثناء التأكيد.",
       });
-    }
-  };
-
-  const printItems = useMemo(
-    () =>
-      details?.items.map((item) => ({
-        id: String(item.id),
-        description: item.description ? `${item.name} - ${item.description}` : item.name,
-        quantity: item.quantity,
-        unitPrice: Number(item.unitPrice || 0),
-        total: Number(item.totalPrice || 0),
-      })) || [],
-    [details?.items]
-  );
-
-  const handlePrintInvoice = async () => {
-    if (!sale) return;
-
-    setIsPrintingInvoice(true);
-    try {
-      await downloadInvoicePdf({
-        fileName: `sale-${sale.saleCode || sale.invoiceNumber}`,
-        invoiceCode: sale.saleCode || sale.invoiceNumber,
-        customerName: sale.customerName || sale.directCustomerName || "العميل",
-        customerPhone: sale.customerPhone || sale.directCustomerPhone || null,
-        invoiceDate: formatDate(sale.saleDate || sale.createdAt),
-        staffName: sale.createdByName || null,
-        caseCode: sale.caseCode || null,
-        deviceLabel: [sale.deviceBrand, sale.deviceApplianceType, sale.deviceModelName].filter(Boolean).join(" - ") || null,
-        notes: sale.notes || null,
-        subtotal: Number(sale.subtotal || 0),
-        discount: Number(sale.discount || 0),
-        tax: Number(sale.tax || 0),
-        total: Number(sale.total || 0),
-        items: printItems,
-      });
-      open?.({
-        type: "success",
-        message: "تم تنزيل الفاتورة",
-        description: "تم إنشاء ملف PDF وتنزيله بنجاح.",
-      });
-    } catch (error) {
-      open?.({
-        type: "error",
-        message: "تعذر تنزيل الفاتورة",
-        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع أثناء إنشاء ملف PDF.",
-      });
-    } finally {
-      setIsPrintingInvoice(false);
     }
   };
 
@@ -212,9 +161,8 @@ export function SalesDetailsPage() {
         </div>
         <div className="flex flex-wrap gap-3">
           {sale ? (
-            <Button type="button" variant="outline" onClick={handlePrintInvoice} disabled={isPrintingInvoice}>
-              <Printer className="size-4" />
-              {isPrintingInvoice ? "جاري تجهيز الفاتورة..." : "طباعة الفاتورة PDF"}
+            <Button type="button" variant="outline" asChild>
+              <Link to={`/invoice-preview/sales/${sale.id}`}>معاينة الفاتورة</Link>
             </Button>
           ) : null}
           {canConfirm && (

@@ -1,6 +1,6 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useGetIdentity, useList, useNotification } from "@refinedev/core";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import {
   ArrowRight,
   CheckCircle2,
@@ -54,7 +54,6 @@ import {
   uploadCaseImageFile,
   uploadCaseVideoFile,
 } from "@/lib/case-media-upload";
-import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { apiClient } from "@/providers/api-client";
 
 type CaseDetailsResponse = {
@@ -870,11 +869,9 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
               <Send />
               Send Diagnosis
             </Button>
-            <CaseInvoicePdfButton
+            <CaseInvoicePreviewButton
               details={details}
-              parts={parts}
-              services={services}
-              label="طباعة الفاتورة PDF"
+              label="معاينة الفاتورة"
             />
           </div>
         </div>
@@ -1967,12 +1964,10 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         <InvoicePreview parts={parts} services={services} />
         <p className="text-sm text-muted-foreground">صور ما بعد الإصلاح والقطعة المعطوبة محفوظة مع الحالة ويمكن ربطها كمرفقات عند تفعيل تكامل WhatsApp/SMS لاحقا.</p>
         <div className="flex flex-wrap gap-3">
-          <CaseInvoicePdfButton
-            details={details}
-            parts={parts}
-            services={services}
-            label="طباعة الفاتورة PDF"
-          />
+          <CaseInvoicePreviewButton
+              details={details}
+              label="معاينة الفاتورة"
+            />
           <Button type="button" variant="outline" onClick={() => setIsReadyDialogOpen(true)}>
             <Send />
             Send Ready Message
@@ -2190,69 +2185,21 @@ function EditableInvoicePreview({
   );
 }
 
-function CaseInvoicePdfButton({
+function CaseInvoicePreviewButton({
   details,
-  parts,
-  services,
   label,
   variant = "outline",
 }: {
   details: CaseDetailsResponse;
-  parts: CasePart[];
-  services: CaseService[];
   label: string;
   variant?: "default" | "outline" | "secondary" | "ghost";
 }) {
-  const { open } = useNotification();
-  const [isExporting, setIsExporting] = useState(false);
-  const { partsTotal, servicesTotal, invoiceTotal } = getInvoiceTotals(parts, services);
-  const items = useMemo(() => getCaseInvoiceItems(parts, services), [parts, services]);
-  const staffName =
-    details.assignedTechnician?.name ||
-    details.caseData.technicianName ||
-    details.createdByUser?.name ||
-    "غير محدد";
-  const deviceLabel = [details.device?.brand, details.device?.applianceType, details.device?.modelName]
-    .filter(Boolean)
-    .join(" - ");
-
-  const handleExport = async () => {
-    setIsExporting(true);
-    try {
-      await downloadInvoicePdf({
-        fileName: `invoice-${details.caseData.caseCode}`,
-        invoiceCode: details.caseData.caseCode,
-        customerName: details.customer?.name || "العميل",
-        customerPhone: details.customer?.phone || null,
-        invoiceDate: formatInvoiceDate(details.caseData.operationFinalizedAt || details.caseData.updatedAt || details.caseData.createdAt),
-        staffName,
-        caseCode: details.caseData.caseCode,
-        deviceLabel: deviceLabel || null,
-        notes: details.caseData.postRepairNote || details.caseData.notes || null,
-        subtotal: partsTotal + servicesTotal,
-        total: invoiceTotal,
-        items,
-      });
-      open?.({
-        type: "success",
-        message: "تم تنزيل الفاتورة",
-        description: "تم إنشاء ملف PDF وتنزيله بنجاح.",
-      });
-    } catch (error) {
-      open?.({
-        type: "error",
-        message: "تعذر تنزيل الفاتورة",
-        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع أثناء إنشاء ملف PDF.",
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
   return (
-    <Button type="button" variant={variant} onClick={handleExport} disabled={isExporting}>
-      <Printer className="size-4" />
-      {isExporting ? "جاري تجهيز الفاتورة..." : label}
+    <Button type="button" variant={variant} asChild>
+      <Link to={`/invoice-preview/cases/${details.caseData.id}`}>
+        <Printer className="size-4" />
+        {label}
+      </Link>
     </Button>
   );
 }
@@ -2345,5 +2292,12 @@ function ImageBox({ imageUrl, label, small }: { imageUrl?: string | null; label:
     </div>
   );
 }
+
+
+
+
+
+
+
 
 

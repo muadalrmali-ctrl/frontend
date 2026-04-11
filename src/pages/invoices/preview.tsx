@@ -263,7 +263,7 @@ export function InvoicePreviewPage() {
       dir="rtl"
       style={{
         minHeight: "100vh",
-        background: "#f3f4f6",
+        background: "#ffffff",
         padding: "24px",
         boxSizing: "border-box",
       }}
@@ -292,7 +292,7 @@ export function InvoicePreviewPage() {
               gap: "8px",
               border: "none",
               background: "transparent",
-              color: "#374151",
+              color: "#3f424e",
               cursor: "pointer",
               fontSize: "15px",
               padding: 0,
@@ -301,7 +301,7 @@ export function InvoicePreviewPage() {
             <ArrowRight size={18} />
             {preview?.returnLabel || "العودة"}
           </button>
-          <h1 style={{ margin: 0, fontSize: "30px", fontWeight: 700, color: "#111827" }}>
+          <h1 style={{ margin: 0, fontSize: "30px", fontWeight: 700, color: "#3f424e" }}>
             {preview?.title || "معاينة الفاتورة"}
           </h1>
           <p style={{ margin: 0, color: "#6b7280" }}>
@@ -319,9 +319,9 @@ export function InvoicePreviewPage() {
                 alignItems: "center",
                 gap: "8px",
                 borderRadius: "12px",
-                border: "1px solid #cfd6df",
+                border: "1px solid #e7ebef",
                 background: "#ffffff",
-                color: "#111827",
+                color: "#3f424e",
                 padding: "12px 18px",
                 fontSize: "15px",
                 fontWeight: 600,
@@ -338,9 +338,9 @@ export function InvoicePreviewPage() {
                 alignItems: "center",
                 gap: "8px",
                 borderRadius: "12px",
-                border: "1px solid #cfd6df",
+                border: "1px solid #e7ebef",
                 background: "#ffffff",
-                color: "#111827",
+                color: "#3f424e",
                 padding: "12px 18px",
                 fontSize: "15px",
                 fontWeight: 600,

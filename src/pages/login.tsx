@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { useLogin } from "@refinedev/core";
-import { ArrowLeft, ShieldCheck, Sparkles, Wrench } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -35,52 +35,48 @@ export function LoginPage() {
 
   return (
     <ThemeProvider>
-      <main className="relative flex min-h-svh items-center justify-center overflow-hidden px-4 py-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(65,178,135,0.2),transparent_26rem),radial-gradient(circle_at_bottom_left,rgba(124,94,240,0.16),transparent_20rem)]" />
+      <main className="relative flex min-h-svh items-center justify-center bg-background px-4 py-8">
         <div className="absolute right-4 top-4 z-10">
-          <ThemeToggle className="glass-panel h-11 w-11 rounded-2xl" />
+          <ThemeToggle className="h-11 w-11 rounded-xl border border-border bg-card" />
         </div>
 
-        <div className="relative z-10 grid w-full max-w-6xl gap-6 lg:grid-cols-[1.12fr_0.88fr]">
-          <div className="page-hero hidden min-h-[640px] lg:flex lg:flex-col lg:justify-between">
+        <div className="grid w-full max-w-5xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="page-hero hidden min-h-[560px] lg:flex lg:flex-col lg:justify-between">
             <div>
-              <Badge className="brand-chip mb-5 border-0 shadow-none">
-                <Sparkles className="size-3.5" />
-                واجهة تشغيل حديثة لمركز الصيانة
+              <Badge className="brand-chip mb-4 border-0 shadow-none">
+                Maintenance Center
               </Badge>
               <h1 className="section-title max-w-2xl">
-                إدارة الحالات والمبيعات والمخزون من مساحة واحدة أكثر وضوحًا.
+                واجهة أخف وأوضح لإدارة الحالات والمخزون والمبيعات.
               </h1>
               <p className="section-subtitle max-w-xl">
-                تسجيل الحالات، متابعة الفنيين، تتبع القطع، والمبيعات اليومية
-                ضمن تجربة عربية أنظف وأكثر حياة.
+                دخول سريع إلى نظام الصيانة مع تجربة بيضاء نظيفة وتركيز أوضح على
+                البيانات المهمة بدل الزخرفة الثقيلة.
               </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <FeatureTile
                 icon={<Wrench className="size-5" />}
-                title="تشغيل الحالات"
-                description="لوحات واضحة للحالة والتشخيص والتنفيذ والاستلام."
-                tone="bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+                title="متابعة الحالات"
+                description="تشخيص، تنفيذ، واستلام داخل مسار واضح وسريع."
               />
               <FeatureTile
                 icon={<ShieldCheck className="size-5" />}
-                title="تتبّع العمليات"
-                description="مؤشرات مرئية وتدفق عمل منظم وآمن للفريق."
-                tone="bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"
+                title="تشغيل موثوق"
+                description="واجهة أخف مع تركيز أكبر على البيانات والعمل اليومي."
               />
             </div>
           </div>
 
-          <Card className="mx-auto w-full max-w-[480px] self-center">
+          <Card className="mx-auto w-full max-w-[460px] self-center">
             <CardHeader className="pb-2">
-              <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-[1.35rem] bg-primary text-primary-foreground shadow-md">
-                <Wrench size={24} />
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Wrench size={22} />
               </div>
               <CardTitle className="text-3xl">تسجيل الدخول</CardTitle>
               <CardDescription>
-                ادخل إلى نظام الصيانة لمتابعة الحالات والمخزون والمبيعات.
+                ادخل إلى النظام لمتابعة الحالات والمخزون والمبيعات.
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-4">
@@ -107,7 +103,7 @@ export function LoginPage() {
                   />
                 </div>
                 {error && (
-                  <p className="rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+                  <p className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
                     {error}
                   </p>
                 )}
@@ -128,16 +124,14 @@ function FeatureTile({
   icon,
   title,
   description,
-  tone,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
-  tone: string;
 }) {
   return (
-    <div className="glass-panel rounded-[1.5rem] p-5">
-      <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${tone}`}>
+    <div className="rounded-[1.1rem] border border-border bg-card p-5 shadow-2xs">
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
         {icon}
       </div>
       <h3 className="mt-4 text-lg font-black text-foreground">{title}</h3>

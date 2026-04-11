@@ -32,7 +32,7 @@ export function Layout() {
               "lg:pt-7"
             )}
           >
-            <div className="app-grid absolute inset-x-0 top-0 -z-10 h-80 rounded-[2.5rem] opacity-50" />
+            <div className="app-grid absolute inset-x-0 top-0 -z-10 h-64 rounded-[2rem] opacity-35" />
             <div className="mx-auto flex w-full max-w-[1700px] flex-1 flex-col">
               <Outlet />
             </div>

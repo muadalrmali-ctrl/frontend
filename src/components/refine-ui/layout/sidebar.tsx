@@ -35,25 +35,12 @@ export function Sidebar() {
   const { menuItems, selectedKey } = useMenu();
 
   return (
-    <ShadcnSidebar
-      collapsible="icon"
-      className={cn("border-none bg-transparent")}
-    >
+    <ShadcnSidebar collapsible="icon" className={cn("border-none bg-sidebar")}>
       <ShadcnSidebarRail />
       <SidebarHeader />
       <ShadcnSidebarContent
         className={cn(
-          "glass-panel",
-          "transition-discrete",
-          "duration-200",
-          "flex",
-          "flex-col",
-          "gap-2",
-          "rounded-[2rem]",
-          "pt-3",
-          "pb-3",
-          "mx-2",
-          "mb-3",
+          "flex flex-col gap-2 border-e border-sidebar-border bg-sidebar pt-3 pb-3",
           {
             "px-3": open,
             "px-2": !open,
@@ -99,31 +86,20 @@ function SidebarItemGroup({ item, selectedKey }: MenuItemProps) {
   const { open } = useShadcnSidebar();
 
   return (
-    <div className={cn("border-t", "border-sidebar-border/80", "pt-4")}>
+    <div className={cn("border-t border-sidebar-border pt-4")}>
       <span
         className={cn(
-          "ml-3",
-          "block",
-          "text-xs",
-          "font-bold",
-          "uppercase",
-          "text-primary/65",
-          "transition-all",
-          "duration-200",
+          "ml-3 block text-xs font-bold uppercase text-muted-foreground transition-all duration-150",
           {
             "h-8": open,
-            "h-0": !open,
-            "opacity-0": !open,
-            "opacity-100": open,
-            "pointer-events-none": !open,
-            "pointer-events-auto": open,
+            "h-0 opacity-0 pointer-events-none": !open,
           }
         )}
       >
         {getDisplayName(item)}
       </span>
       {children && children.length > 0 && (
-        <div className={cn("flex", "flex-col")}>
+        <div className={cn("flex flex-col")}>
           {children.map((child: TreeMenuItem) => (
             <SidebarItem
               key={child.key || child.name}
@@ -141,25 +117,15 @@ function SidebarItemCollapsible({ item, selectedKey }: MenuItemProps) {
   const { name, children } = item;
 
   const chevronIcon = (
-    <ChevronRight
-      className={cn(
-        "h-4",
-        "w-4",
-        "shrink-0",
-        "text-muted-foreground",
-        "transition-transform",
-        "duration-200",
-        "group-data-[state=open]:rotate-90"
-      )}
-    />
+    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-150 group-data-[state=open]:rotate-90" />
   );
 
   return (
-    <Collapsible key={`collapsible-${name}`} className={cn("w-full", "group")}>
+    <Collapsible key={`collapsible-${name}`} className={cn("group w-full")}>
       <CollapsibleTrigger asChild>
         <SidebarButton item={item} rightIcon={chevronIcon} />
       </CollapsibleTrigger>
-      <CollapsibleContent className={cn("ml-6", "flex", "flex-col", "gap-2")}>
+      <CollapsibleContent className={cn("ml-5 flex flex-col gap-2")}>
         {children?.map((child: TreeMenuItem) => (
           <SidebarItem
             key={child.key || child.name}
@@ -194,11 +160,7 @@ function SidebarItemDropdown({ item, selectedKey }: MenuItemProps) {
                   "bg-accent text-accent-foreground": isSelected,
                 })}
               >
-                <ItemIcon
-                  icon={child.meta?.icon ?? child.icon}
-                  itemName={child.name}
-                  isSelected={isSelected}
-                />
+                <ItemIcon icon={child.meta?.icon ?? child.icon} />
                 <span>{getDisplayName(child)}</span>
               </Link>
             </DropdownMenuItem>
@@ -211,8 +173,7 @@ function SidebarItemDropdown({ item, selectedKey }: MenuItemProps) {
 
 function SidebarItemLink({ item, selectedKey }: MenuItemProps) {
   const isSelected = item.key === selectedKey;
-
-  return <SidebarButton item={item} isSelected={isSelected} asLink={true} />;
+  return <SidebarButton item={item} isSelected={isSelected} asLink />;
 }
 
 function SidebarHeader() {
@@ -220,58 +181,30 @@ function SidebarHeader() {
   const { open, isMobile } = useShadcnSidebar();
 
   return (
-    <ShadcnSidebarHeader
-      className={cn(
-        "p-2",
-        "h-20",
-        "flex-row",
-        "items-center",
-        "justify-between",
-        "overflow-hidden"
-      )}
-    >
+    <ShadcnSidebarHeader className="h-18 flex-row items-center justify-between border-e border-sidebar-border bg-sidebar p-3">
       <div
-        className={cn(
-          "glass-panel whitespace-nowrap",
-          "flex",
-          "flex-row",
-          "h-16",
-          "items-center",
-          "justify-start",
-          "gap-2",
-          "rounded-[1.8rem]",
-          "px-3",
-          "transition-discrete",
-          "duration-200",
-          {
-            "w-[calc(100%-3.5rem)]": open,
-            "w-[3.4rem]": !open,
-          }
-        )}
+        className={cn("flex h-12 flex-row items-center justify-start gap-2 overflow-hidden px-2", {
+          "w-[calc(100%-3.2rem)]": open,
+          "w-[3.2rem]": !open,
+        })}
       >
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
           {title.icon}
         </div>
         <h2
-          className={cn(
-            "text-sm font-black",
-            "transition-opacity",
-            "duration-200",
-            {
-              "opacity-0": !open,
-              "opacity-100": open,
-            }
-          )}
+          className={cn("text-sm font-black text-foreground transition-opacity duration-150", {
+            "opacity-0": !open,
+            "opacity-100": open,
+          })}
         >
           {title.text}
         </h2>
       </div>
 
       <ShadcnSidebarTrigger
-        className={cn("glass-panel text-muted-foreground mr-1.5 rounded-2xl", {
+        className={cn("mr-1.5 rounded-xl border border-border bg-card text-muted-foreground", {
           "opacity-0": !open,
-          "opacity-100": open || isMobile,
-          "pointer-events-auto": open || isMobile,
+          "opacity-100 pointer-events-auto": open || isMobile,
           "pointer-events-none": !open && !isMobile,
         })}
       />
@@ -285,35 +218,12 @@ function getDisplayName(item: TreeMenuItem) {
 
 type IconProps = {
   icon: React.ReactNode;
-  itemName?: string;
-  isSelected?: boolean;
 };
 
-const ITEM_ICON_TONES: Record<string, string> = {
-  dashboard: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
-  cases: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
-  "maintenance-operations": "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
-  inventory: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-  sales: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
-  reports: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
-  accounting: "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300",
-  "accounting-customers": "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300",
-  "accounting-team": "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300",
-};
-
-function ItemIcon({ icon, itemName, isSelected }: IconProps) {
-  const toneClass = isSelected
-    ? "bg-primary text-primary-foreground shadow-sm"
-    : ITEM_ICON_TONES[itemName || ""] || "bg-sidebar-accent text-sidebar-accent-foreground";
-
+function ItemIcon({ icon }: IconProps) {
   return (
-    <div
-      className={cn(
-        "flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-200",
-        toneClass
-      )}
-    >
-      {icon ?? <ListIcon />}
+    <div className="flex h-5 w-5 items-center justify-center text-current opacity-80">
+      {icon ?? <ListIcon className="size-4" />}
     </div>
   );
 }
@@ -339,21 +249,13 @@ function SidebarButton({
 
   const buttonContent = (
     <>
-      <ItemIcon
-        icon={item.meta?.icon ?? item.icon}
-        itemName={item.name}
-        isSelected={isSelected}
-      />
+      <ItemIcon icon={item.meta?.icon ?? item.icon} />
       <span
         className={cn("tracking-[-0.00875rem]", {
-          "flex-1": rightIcon,
-          "text-left": rightIcon,
-          "line-clamp-1": !rightIcon,
-          truncate: !rightIcon,
+          "flex-1 text-left": rightIcon,
+          "line-clamp-1 truncate": !rightIcon,
           "font-medium": !isSelected,
           "font-bold": isSelected,
-          "text-sidebar-primary": isSelected,
-          "text-foreground": !isSelected,
         })}
       >
         {getDisplayName(item)}
@@ -367,14 +269,11 @@ function SidebarButton({
       asChild={!!(asLink && item.route)}
       variant="ghost"
       size="lg"
-        className={cn(
-        "flex h-auto w-full items-center justify-start gap-3 rounded-2xl py-2.5 !px-3 text-sm",
+      className={cn(
+        "flex h-auto w-full items-center justify-start gap-3 rounded-xl py-2.5 !px-3 text-sm text-sidebar-foreground",
         {
-          "bg-sidebar-primary/12 text-sidebar-primary shadow-xs": isSelected,
-          "hover:!bg-sidebar-primary/16": isSelected,
-          "text-sidebar-primary": isSelected,
-          "hover:text-sidebar-primary": isSelected,
-          "hover:bg-sidebar-accent/80": !isSelected,
+          "border border-primary/12 bg-primary/8 text-primary": isSelected,
+          "hover:!bg-sidebar-accent": !isSelected,
         },
         className
       )}

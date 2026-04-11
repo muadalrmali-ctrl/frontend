@@ -13,7 +13,7 @@ import {
   useLogout,
   useRefineOptions,
 } from "@refinedev/core";
-import { Bell, LogOutIcon, Sparkles } from "lucide-react";
+import { Bell, LogOutIcon } from "lucide-react";
 
 export const Header = () => {
   const { isMobile } = useSidebar();
@@ -25,43 +25,25 @@ function DesktopHeader() {
   const { title } = useRefineOptions();
 
   return (
-    <header
-      className={cn(
-        "sticky",
-        "top-0",
-        "flex",
-        "h-20",
-        "shrink-0",
-        "items-center",
-        "gap-4",
-        "justify-between",
-        "z-40"
-      )}
-    >
-      <div className="glass-panel flex items-center gap-3 rounded-[1.7rem] px-4 py-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
+    <header className="sticky top-0 z-40 mb-3 flex h-16 shrink-0 items-center justify-between gap-4 border-b border-border bg-background px-1">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
           {title.icon}
         </div>
-        <div className="space-y-1">
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-primary/70">
-            Maintenance Center
-          </p>
-          <h2 className="text-lg font-black text-foreground">{title.text}</h2>
+        <div>
+          <h2 className="text-base font-black text-foreground">{title.text}</h2>
+          <p className="text-xs text-muted-foreground">نظام إدارة مركز الصيانة</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="glass-panel hidden items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-muted-foreground lg:flex">
-          <Sparkles className="size-4 text-violet-500" />
-          واجهة تشغيل أكثر حيوية ووضوحًا
-        </div>
+      <div className="flex items-center gap-2">
         <button
           type="button"
-          className="glass-panel inline-flex h-12 w-12 items-center justify-center rounded-2xl text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
         >
-          <Bell className="size-5" />
+          <Bell className="size-4" />
         </button>
-        <ThemeToggle />
+        <ThemeToggle className="h-10 w-10 rounded-xl border border-border bg-card" />
         <UserDropdown />
       </div>
     </header>
@@ -70,26 +52,12 @@ function DesktopHeader() {
 
 function MobileHeader() {
   const { open, isMobile } = useSidebar();
-
   const { title } = useRefineOptions();
 
   return (
-    <header
-      className={cn(
-        "sticky",
-        "top-0",
-        "flex",
-        "h-16",
-        "shrink-0",
-        "items-center",
-        "gap-2",
-        "px-2",
-        "justify-between",
-        "z-40"
-      )}
-    >
+    <header className="sticky top-0 z-40 mb-3 flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border bg-background/95 px-2">
       <SidebarTrigger
-        className={cn("glass-panel text-muted-foreground rotate-180 rounded-2xl", "ml-1", {
+        className={cn("ml-1 rotate-180 rounded-xl border border-border bg-card text-muted-foreground", {
           "opacity-0": open,
           "opacity-100": !open || isMobile,
           "pointer-events-auto": !open || isMobile,
@@ -97,48 +65,27 @@ function MobileHeader() {
         })}
       />
 
-      <div
-        className={cn(
-          "glass-panel whitespace-nowrap",
-          "flex",
-          "flex-row",
-          "h-12",
-          "items-center",
-          "justify-start",
-          "gap-2",
-          "rounded-[1.35rem]",
-          "px-3",
-          "transition-discrete",
-          "duration-200",
-          "max-w-[calc(100vw-8.5rem)]"
-        )}
-      >
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+      <div className="flex max-w-[calc(100vw-8.5rem)] items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
           {title.icon}
         </div>
         <h2
-          className={cn(
-            "text-sm font-black",
-            "transition-opacity",
-            "duration-200",
-            {
-              "opacity-0": !open,
-              "opacity-100": open,
-            }
-          )}
+          className={cn("text-sm font-black text-foreground transition-opacity duration-150", {
+            "opacity-0": !open,
+            "opacity-100": open,
+          })}
         >
           {title.text}
         </h2>
       </div>
 
-      <ThemeToggle className={cn("glass-panel h-10 w-10 rounded-2xl")} />
+      <ThemeToggle className="h-10 w-10 rounded-xl border border-border bg-card" />
     </header>
   );
 }
 
 const UserDropdown = () => {
   const { mutate: logout, isPending: isLoggingOut } = useLogout();
-
   const authProvider = useActiveAuthProvider();
 
   if (!authProvider?.getIdentity) {
@@ -151,14 +98,8 @@ const UserDropdown = () => {
         <UserAvatar />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem
-          onClick={() => {
-            logout();
-          }}
-        >
-          <LogOutIcon
-            className={cn("text-destructive", "hover:text-destructive")}
-          />
+        <DropdownMenuItem onClick={() => logout()}>
+          <LogOutIcon className={cn("text-destructive", "hover:text-destructive")} />
           <span className={cn("text-destructive", "hover:text-destructive")}>
             {isLoggingOut ? "Logging out..." : "Logout"}
           </span>

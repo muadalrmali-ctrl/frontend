@@ -46,11 +46,11 @@ const formatCurrency = (value?: number) =>
   }).format(value ?? 0);
 
 const STATUS_TONES = [
-  "from-emerald-500/12 to-emerald-400/8 text-emerald-700 dark:text-emerald-300",
-  "from-sky-500/12 to-sky-400/8 text-sky-700 dark:text-sky-300",
-  "from-violet-500/12 to-violet-400/8 text-violet-700 dark:text-violet-300",
-  "from-amber-500/12 to-amber-400/8 text-amber-700 dark:text-amber-300",
-  "from-rose-500/12 to-rose-400/8 text-rose-700 dark:text-rose-300",
+  "bg-emerald-50 text-emerald-700 border-emerald-100",
+  "bg-sky-50 text-sky-700 border-sky-100",
+  "bg-violet-50 text-violet-700 border-violet-100",
+  "bg-amber-50 text-amber-700 border-amber-100",
+  "bg-rose-50 text-rose-700 border-rose-100",
 ];
 
 export function DashboardPage() {
@@ -231,7 +231,7 @@ export function DashboardPage() {
                   <div
                     key={status}
                     className={cn(
-                      "rounded-[1.5rem] border border-border/65 bg-gradient-to-br px-4 py-4",
+                      "rounded-[1.2rem] border px-4 py-4",
                       STATUS_TONES[index % STATUS_TONES.length]
                     )}
                   >
@@ -239,11 +239,11 @@ export function DashboardPage() {
                       <span className="text-sm font-black capitalize">
                         {status.replaceAll("_", " ")}
                       </span>
-                      <span className="rounded-full bg-white/75 px-3 py-1 text-sm font-black text-foreground shadow-xs dark:bg-slate-950/30 dark:text-foreground">
+                      <span className="rounded-full bg-white px-3 py-1 text-sm font-black text-foreground shadow-2xs">
                         {String(count)}
                       </span>
                     </div>
-                    <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/65 dark:bg-slate-950/25">
+                    <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/80">
                       <div
                         className="h-full rounded-full bg-current opacity-75"
                         style={{
@@ -345,7 +345,7 @@ function MiniPulseCard({
   tone: string;
 }) {
   return (
-    <div className="glass-panel rounded-[1.5rem] px-4 py-4">
+    <div className="rounded-[1.2rem] border border-border bg-card px-4 py-4 shadow-2xs">
       <p className="text-xs font-bold text-muted-foreground">{title}</p>
       <div className={cn("mt-3 text-2xl font-black tracking-tight", tone)}>{value}</div>
     </div>
@@ -371,7 +371,7 @@ function QuickInsight({
           : "info";
 
   return (
-    <div className="flex items-center justify-between rounded-[1.4rem] border border-border/65 bg-background/55 px-4 py-4">
+    <div className="flex items-center justify-between rounded-[1.1rem] border border-border bg-background px-4 py-4">
       <div className="space-y-1">
         <p className="text-sm font-bold text-foreground">{title}</p>
         <p className="text-xs text-muted-foreground">مقروءة مباشرة من البيانات الحالية</p>

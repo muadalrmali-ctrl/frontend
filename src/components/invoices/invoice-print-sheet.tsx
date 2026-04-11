@@ -58,8 +58,8 @@ export function InvoicePrintSheet({
         maxWidth: "980px",
         margin: "0 auto",
         background: "#ffffff",
-        color: "#1f2937",
-        fontFamily: "Tahoma, Arial, sans-serif",
+        color: "#3f424e",
+        fontFamily: "\"Tajawal\", Tahoma, Arial, sans-serif",
         padding: "32px",
         boxSizing: "border-box",
       }}
@@ -75,7 +75,7 @@ export function InvoicePrintSheet({
         }}
       >
         <div style={{ textAlign: "right" }}>
-          <h1 style={{ margin: 0, fontSize: "36px", fontWeight: 700, color: "#111827" }}>شركة الجهاد</h1>
+          <h1 style={{ margin: 0, fontSize: "36px", fontWeight: 700, color: "#3f424e" }}>شركة الجهاد</h1>
           <p style={{ margin: "10px 0 0", fontSize: "17px", color: "#4b5563" }}>
             لاستيراد الأجهزة الكهرومنزلية | جملة وقطاعي
           </p>
@@ -84,7 +84,7 @@ export function InvoicePrintSheet({
           <p style={{ margin: 0, fontSize: "12px", letterSpacing: "0.25em", color: "#9ca3af", textTransform: "uppercase" }}>
             Invoice
           </p>
-          <p style={{ margin: "12px 0 0", fontSize: "34px", fontWeight: 700, color: "#2f6f2f" }}>{invoiceCode}</p>
+          <p style={{ margin: "12px 0 0", fontSize: "34px", fontWeight: 700, color: "#01b224" }}>{invoiceCode}</p>
         </div>
       </div>
 
@@ -176,7 +176,7 @@ export function InvoicePrintSheet({
         }}
       >
         <div style={{ ...boxStyle, minHeight: "150px" }}>
-          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "#111827" }}>ملاحظات وشروط</h2>
+          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "#3f424e" }}>ملاحظات وشروط</h2>
           <ul style={{ margin: "14px 0 0", paddingInlineStart: "20px", color: "#4b5563", lineHeight: 1.9, fontSize: "14px" }}>
             <li>تخضع جميع السلع لشروطنا وأحكامنا.</li>
             <li>الضمان يشمل عيوب التصنيع ولا يشمل سوء الاستخدام أو الحوادث.</li>
@@ -222,7 +222,7 @@ function BodyCell({
         padding: "14px 16px",
         borderTop: "1px solid #e5e7eb",
         fontSize: "14px",
-        color: "#1f2937",
+        color: "#3f424e",
         fontWeight: emphasized ? 700 : 500,
         textAlign: "right",
       }}
@@ -236,7 +236,7 @@ function InfoBox({ label, value }: { label: string; value: string }) {
   return (
     <div style={boxStyle}>
       <div style={{ fontSize: "13px", color: "#6b7280", marginBottom: "6px" }}>{label}</div>
-      <div style={{ fontSize: "16px", color: "#111827", fontWeight: 600 }}>{value}</div>
+      <div style={{ fontSize: "16px", color: "#3f424e", fontWeight: 600 }}>{value}</div>
     </div>
   );
 }
@@ -258,13 +258,13 @@ function SummaryRow({
         alignItems: "center",
         gap: "12px",
         marginTop: "8px",
-        color: emphasized ? "#111827" : "#4b5563",
+        color: emphasized ? "#3f424e" : "#4b5563",
         fontWeight: emphasized ? 700 : 500,
         fontSize: emphasized ? "18px" : "15px",
       }}
     >
       <span>{label}</span>
-      <span style={{ color: emphasized ? "#2f6f2f" : "#111827" }}>{value}</span>
+      <span style={{ color: emphasized ? "#01b224" : "#3f424e" }}>{value}</span>
     </div>
   );
 }

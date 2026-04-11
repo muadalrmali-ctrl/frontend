@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 type CaseRecord = {
   id: number;
   caseCode: string;
+  caseType?: string | null;
   status: string;
   customerComplaint: string;
   priority?: string | null;
@@ -107,6 +108,9 @@ const getDeviceName = (caseItem: CaseRecord) =>
   [caseItem.deviceBrand, caseItem.deviceApplianceType, caseItem.deviceModelName]
     .filter(Boolean)
     .join(" ") || "-";
+
+const getCaseTypeLabel = (caseType?: string | null) =>
+  caseType === "external" ? "خارجي" : "داخلي";
 
 export function CasesPage() {
   const [collapsedColumns, setCollapsedColumns] = useState<string[]>([]);
@@ -357,7 +361,10 @@ function CaseCard({
             {caseItem.customerName ?? "عميل غير محدد"}
           </h3>
         </div>
-        <Badge variant="secondary">{caseItem.priority ?? "متوسطة"}</Badge>
+        <div className="flex flex-col items-end gap-2">
+          <Badge variant="secondary">{caseItem.priority ?? "متوسطة"}</Badge>
+          <Badge variant="outline">{getCaseTypeLabel(caseItem.caseType)}</Badge>
+        </div>
       </div>
 
       <div className="mt-3 space-y-2 text-sm text-muted-foreground">

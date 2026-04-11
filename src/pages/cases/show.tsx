@@ -63,6 +63,7 @@ type CaseDetailsResponse = {
 type CaseData = {
   id: number;
   caseCode: string;
+  caseType?: string | null;
   status: string;
   customerComplaint: string;
   priority: string;
@@ -150,6 +151,11 @@ const statusLabels: Record<string, string> = {
   not_repairable: "لا يمكن إصلاحها",
 };
 
+const caseTypeLabels: Record<string, string> = {
+  internal: "داخلية داخل المركز",
+  external: "خارجية / موقع العميل",
+};
+
 const channelLabels = ["WhatsApp", "Email", "SMS", "other"];
 const MAX_INLINE_IMAGE_BYTES = MAX_CASE_MEDIA_FILE_BYTES;
 
@@ -176,6 +182,24 @@ const toNumber = (value?: string | null) => {
   return Number.isFinite(numericValue) ? numericValue : 0;
 };
 const formatMoney = (value: number) => `${value.toLocaleString("ar-LY")} د.ل`;
+const getCaseTypeLabel = (caseType?: string | null) =>
+  caseTypeLabels[caseType || "internal"] || caseTypeLabels.internal;
+const getPartHandoffLabel = (handoffStatus?: string | null) => {
+  switch (handoffStatus) {
+    case "requested":
+      return "تم طلبها للزيارة الخارجية";
+    case "delivered":
+      return "تم التسليم";
+    case "received":
+      return "تم الاستلام";
+    case "consumed":
+      return "تم الاستخدام";
+    case "returned":
+      return "تمت الإعادة للمخزن";
+    default:
+      return "بانتظار الإجراء";
+  }
+};
 const getInvoiceTotals = (parts: CasePart[], services: CaseService[]) => {
   const partsTotal = parts.reduce((sum, part) => sum + toNumber(part.totalPrice), 0);
   const servicesTotal = services.reduce((sum, service) => sum + toNumber(service.totalPrice), 0);
@@ -371,6 +395,9 @@ export function CaseDetailsPage() {
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold">تفاصيل الحالة</h1>
             <Badge className="px-3 py-1 text-sm">{statusLabel}</Badge>
+            <Badge variant="outline" className="px-3 py-1 text-sm">
+              {getCaseTypeLabel(details?.caseData.caseType)}
+            </Badge>
           </div>
           <p className="mt-2 text-muted-foreground">صفحة تشغيلية لمتابعة بيانات الحالة والقطع والتشخيص والتنفيذ.</p>
         </div>
@@ -407,6 +434,7 @@ function BasicCaseInfo({ details }: { details: CaseDetailsResponse }) {
         <CardHeader><CardTitle>المعلومات الأساسية</CardTitle></CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
           <Info label="حالة الحالة / الأولوية" value={details.caseData.priority || "متوسطة"} />
+          <Info label="نوع الحالة" value={getCaseTypeLabel(details.caseData.caseType)} />
           <Info label="تاريخ الإنشاء" value={formatDate(details.caseData.createdAt)} />
           <Info label="رقم الحالة" value={details.caseData.caseCode} />
           <Info label="أنشأها من" value={details.createdByUser?.name || "غير محدد"} />
@@ -1012,6 +1040,7 @@ function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }:
   const [error, setError] = useState<string | null>(null);
   const { invoiceTotal } = getInvoiceTotals(parts, services);
   const rejectionReason = "Customer rejected repair after diagnosis";
+  const isExternalCase = details.caseData.caseType === "external";
   const approvalConfirmed = Boolean(details.caseData.customerApprovedAt);
   const hasCaseParts = parts.length > 0;
   const allPartsReceived = parts.every(isPartReadyForExecution);
@@ -1089,17 +1118,46 @@ function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }:
     }
   };
 
-  const handlePartAction = async (partId: number, action: "deliver" | "receive") => {
+  const handlePartAction = async (
+    partId: number,
+    action: "request" | "deliver" | "receive" | "use" | "return"
+  ) => {
     setError(null);
     setPendingPartActionId(partId);
     try {
       await apiClient(`/api/cases/${details.caseData.id}/parts/${partId}/${action}`, {
         method: "PATCH",
       });
+      const actionMessages = {
+        request: {
+          message: "تم طلب القطعة",
+          description: "تم تسجيل القطعة كطلب زيارة خارجية بانتظار التسليم من المخزن.",
+        },
+        deliver: {
+          message: "تم التسليم",
+          description: isExternalCase
+            ? "تم نقل القطعة من المخزن إلى عهدة الفني للحالة الخارجية."
+            : "تم نقل القطعة من المخزن إلى الحالة.",
+        },
+        receive: {
+          message: "تم الاستلام",
+          description: isExternalCase
+            ? "تم تأكيد استلام الفني للقطعة ضمن عهدة الزيارة الخارجية."
+            : "تم تأكيد استلام الفني للقطعة.",
+        },
+        use: {
+          message: "تم استخدام القطعة",
+          description: "تم تسجيل القطعة كمستخدمة فعلياً في الصيانة الخارجية.",
+        },
+        return: {
+          message: "تمت إعادة القطعة",
+          description: "تمت إعادة القطعة من عهدة الفني إلى المخزن.",
+        },
+      } as const;
       open?.({
         type: "success",
-        message: action === "deliver" ? "تم تسليم القطعة" : "تم استلام القطعة",
-        description: action === "deliver" ? "تم نقل القطعة من المخزن إلى الحالة." : "تم تأكيد استلام الفني للقطعة.",
+        message: actionMessages[action].message,
+        description: actionMessages[action].description,
       });
       await onSaved();
     } catch (requestError) {
@@ -1150,16 +1208,27 @@ function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }:
         </AlertDialogContent>
       </AlertDialog>
       {isEditingInvoice && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={onSaved} />}
-      {approvalConfirmed && (
+      {(approvalConfirmed || isExternalCase) && (
         <Card className="rounded-lg border-primary/20">
-          <CardHeader><CardTitle>تسليم القطع واستلامها</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>{isExternalCase ? "عهدة القطع للحالة الخارجية" : "تسليم القطع واستلامها"}</CardTitle>
+          </CardHeader>
           <CardContent className="grid gap-4">
             <p className="text-sm text-muted-foreground">
-              بعد موافقة العميل، يسجل مسؤول المخزن تسليم القطع للحالة ثم يؤكد الفني الاستلام. أول ما تكتمل هذه الخطوة سيظهر نموذج بدء التنفيذ الحالي.
+              {isExternalCase
+                ? "في الحالات الخارجية يمكن طلب القطعة قبل الموافقة النهائية، ثم تسليمها إلى عهدة الفني، وبعد الزيارة يمكن تسجيل استخدامها أو إعادتها للمخزن. يبدأ التنفيذ الحالي بعد الموافقة عندما تصبح حالة القطع جاهزة."
+                : "بعد موافقة العميل، يسجل مسؤول المخزن تسليم القطع للحالة ثم يؤكد الفني الاستلام. أول ما تكتمل هذه الخطوة سيظهر نموذج بدء التنفيذ الحالي."}
             </p>
+            {isExternalCase && !approvalConfirmed && (
+              <div className="rounded-xl border border-dashed bg-muted/10 p-4 text-sm text-muted-foreground">
+                هذه حالة خارجية، لذلك يمكن تحريك القطع إلى عهدة الفني قبل تسجيل موافقة العميل النهائية، مع بقاء التنفيذ نفسه مرتبطاً بخطوة الموافقة الحالية.
+              </div>
+            )}
             {parts.length === 0 ? (
               <div className="rounded-xl border bg-muted/20 p-4 text-sm text-muted-foreground">
-                لا توجد قطع مرتبطة بالفاتورة حالياً، ويمكن الانتقال مباشرة إلى تجهيز التنفيذ.
+                {isExternalCase
+                  ? "لا توجد قطع مرتبطة بالحالة الخارجية حالياً. يمكن إضافة قطعة من الفاتورة أو من تعديل التنفيذ ثم متابعتها ضمن عهدة الفني عند الحاجة."
+                  : "لا توجد قطع مرتبطة بالفاتورة حالياً، ويمكن الانتقال مباشرة إلى تجهيز التنفيذ."}
               </div>
             ) : (
               parts.map((part) => (
@@ -1171,11 +1240,21 @@ function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }:
                         الكمية: {part.quantity} • الكود: {part.inventoryCode || "-"}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        الحالة: {part.handoffStatus === "received" ? "تم الاستلام" : part.handoffStatus === "delivered" ? "تم التسليم" : part.handoffStatus === "consumed" ? "تم الاستهلاك" : "بانتظار التسليم"}
+                        الحالة: {getPartHandoffLabel(part.handoffStatus)}
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {canDeliver && part.handoffStatus === "pending" && (
+                      {isExternalCase && canReceive && part.handoffStatus === "pending" && (
+                        <Button type="button" variant="outline" onClick={() => handlePartAction(part.id, "request")} disabled={pendingPartActionId === part.id}>
+                          طلب القطعة
+                        </Button>
+                      )}
+                      {isExternalCase && canDeliver && part.handoffStatus === "requested" && (
+                        <Button type="button" onClick={() => handlePartAction(part.id, "deliver")} disabled={pendingPartActionId === part.id}>
+                          تم التسليم
+                        </Button>
+                      )}
+                      {!isExternalCase && canDeliver && part.handoffStatus === "pending" && (
                         <Button type="button" onClick={() => handlePartAction(part.id, "deliver")} disabled={pendingPartActionId === part.id}>
                           تم التسليم
                         </Button>
@@ -1184,6 +1263,16 @@ function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }:
                         <Button type="button" variant="secondary" onClick={() => handlePartAction(part.id, "receive")} disabled={pendingPartActionId === part.id}>
                           تم الاستلام
                         </Button>
+                      )}
+                      {isExternalCase && canReceive && part.handoffStatus === "received" && (
+                        <>
+                          <Button type="button" variant="secondary" onClick={() => handlePartAction(part.id, "use")} disabled={pendingPartActionId === part.id}>
+                            تم الاستخدام
+                          </Button>
+                          <Button type="button" variant="outline" onClick={() => handlePartAction(part.id, "return")} disabled={pendingPartActionId === part.id}>
+                            تمت الإعادة
+                          </Button>
+                        </>
                       )}
                     </div>
                   </div>

@@ -68,6 +68,7 @@ type Technician = {
 };
 
 type CreateCaseValues = {
+  caseType: "internal" | "external";
   selectedCustomerId: number | null;
   selectedDeviceId: number | null;
   selectedTechnicianId: number | null;
@@ -91,6 +92,7 @@ type NewDeviceValues = {
 };
 
 const initialValues: CreateCaseValues = {
+  caseType: "internal",
   selectedCustomerId: null,
   selectedDeviceId: null,
   selectedTechnicianId: null,
@@ -230,6 +232,7 @@ export function CreateCasePage() {
         values: {
           customerId: values.selectedCustomerId,
           deviceId: values.selectedDeviceId,
+          caseType: values.caseType,
           assignedTechnicianId: values.selectedTechnicianId,
           technicianName: selectedTechnician.name,
           customerComplaint: values.customerComplaint,
@@ -388,6 +391,22 @@ export function CreateCasePage() {
           </FormSection>
 
           <FormSection title="التعيين والأولوية">
+            <Field label="نوع الحالة">
+              <Select
+                value={values.caseType}
+                onValueChange={(value) =>
+                  setField("caseType", value as CreateCaseValues["caseType"])
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="internal">داخلي داخل المركز</SelectItem>
+                  <SelectItem value="external">خارجي / موقع العميل</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
             <Field label="الفني المسؤول">
               <SearchableSelect
                 emptyText="لا يوجد فنيون"

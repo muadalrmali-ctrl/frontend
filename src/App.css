@@ -13,6 +13,7 @@
   --popover-foreground: #3f424e;
   --primary: #01b224;
   --primary-foreground: #ffffff;
+  --brand-secondary: #415cb3;
   --secondary: #f1f4f2;
   --secondary-foreground: #4d5564;
   --muted: #eef2f1;
@@ -98,6 +99,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-brand-secondary: var(--brand-secondary);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
@@ -212,6 +214,10 @@
 
   .soft-accent-text {
     color: #01b224;
+  }
+
+  .secondary-accent-text {
+    color: var(--brand-secondary);
   }
 }
 

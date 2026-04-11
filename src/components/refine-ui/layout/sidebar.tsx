@@ -222,7 +222,7 @@ type IconProps = {
 
 function ItemIcon({ icon }: IconProps) {
   return (
-    <div className="flex h-5 w-5 items-center justify-center text-current opacity-80">
+    <div className="flex h-5 w-5 items-center justify-center text-current">
       {icon ?? <ListIcon className="size-4" />}
     </div>
   );
@@ -272,7 +272,7 @@ function SidebarButton({
       className={cn(
         "flex h-auto w-full items-center justify-start gap-3 rounded-xl py-2.5 !px-3 text-sm text-sidebar-foreground",
         {
-          "border border-primary/12 bg-primary/8 text-primary": isSelected,
+          "bg-primary text-white shadow-xs hover:bg-primary/95": isSelected,
           "hover:!bg-sidebar-accent": !isSelected,
         },
         className

@@ -17,6 +17,10 @@ import {
   Trash2,
   Wrench,
 } from "lucide-react";
+import {
+  CaseStatusBadge,
+  CaseTypeBadge,
+} from "@/components/cases/case-badges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -420,10 +424,8 @@ export function CaseDetailsPage() {
           </Button>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <h1 className="text-3xl font-semibold">تفاصيل الحالة</h1>
-            <Badge className="px-3 py-1 text-sm">{statusLabel}</Badge>
-            <Badge variant="outline" className="px-3 py-1 text-sm">
-              {getCaseTypeLabel(details?.caseData.caseType)}
-            </Badge>
+            <CaseStatusBadge status={status} label={statusLabel} />
+            <CaseTypeBadge caseType={details?.caseData.caseType} className="text-sm" />
           </div>
           <p className="mt-2 text-muted-foreground">صفحة تشغيلية لمتابعة بيانات الحالة والقطع والتشخيص والتنفيذ.</p>
         </div>

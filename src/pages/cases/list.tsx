@@ -2,14 +2,12 @@ import { DragEvent, useMemo, useState } from "react";
 import { useList, useUpdate } from "@refinedev/core";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Link } from "react-router";
+import {
+  CasePriorityBadge,
+  CaseTypeBadge,
+} from "@/components/cases/case-badges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 type CaseRecord = {
@@ -54,7 +52,7 @@ const WORKFLOW_COLUMNS: WorkflowColumn[] = [
   },
   {
     key: "waiting_approval",
-    label: "بانتظار الموافقة",
+    label: "بانتظار موافقة وتسجيل استلام قطعة غيار",
     statuses: ["waiting_approval"],
     targetStatus: "waiting_approval",
   },
@@ -77,11 +75,6 @@ const WORKFLOW_COLUMNS: WorkflowColumn[] = [
     targetStatus: "not_repairable",
   },
 ];
-
-const waitingApprovalColumn = WORKFLOW_COLUMNS.find((column) => column.key === "waiting_approval");
-if (waitingApprovalColumn) {
-  waitingApprovalColumn.label = "بانتظار موافقة وتسجيل استلام قطعة غيار";
-}
 
 const ALLOWED_BOARD_TRANSITIONS: Record<string, string[]> = {
   received: ["waiting_part", "diagnosing", "not_repairable"],
@@ -108,9 +101,6 @@ const getDeviceName = (caseItem: CaseRecord) =>
   [caseItem.deviceBrand, caseItem.deviceApplianceType, caseItem.deviceModelName]
     .filter(Boolean)
     .join(" ") || "-";
-
-const getCaseTypeLabel = (caseType?: string | null) =>
-  caseType === "external" ? "خارجي" : "داخلي";
 
 export function CasesPage() {
   const [collapsedColumns, setCollapsedColumns] = useState<string[]>([]);
@@ -205,39 +195,32 @@ export function CasesPage() {
         </p>
       )}
       {!query.isLoading && !query.error && (
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b border-border/60">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <CardTitle className="text-xl">لوحة سير العمل</CardTitle>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  الحركات الخلفية من قيد التنفيذ إلى المراحل السابقة غير مسموحة.
-                </p>
-              </div>
-              <Badge variant="outline" className="w-fit">
-                {cases.length} حالة
-              </Badge>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Badge
+              variant="outline"
+              className="rounded-full border-[#d6deee] bg-white px-3 py-1 text-xs font-bold text-[#415CB3]"
+            >
+              {cases.length} حالة
+            </Badge>
+          </div>
+          <div className="overflow-x-auto">
+            <div className="flex min-h-[560px] min-w-max flex-row gap-4 pb-2">
+              {groupedCases.map((column) => (
+                <WorkflowLane
+                  key={column.key}
+                  column={column}
+                  isCollapsed={collapsedColumns.includes(column.key)}
+                  draggedCase={draggedCase}
+                  onToggle={() => toggleColumn(column.key)}
+                  onDragStart={(caseItem) => setDraggedCase(caseItem)}
+                  onDragEnd={() => setDraggedCase(null)}
+                  onDrop={(event) => handleDrop(event, column)}
+                />
+              ))}
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <div className="flex min-h-[560px] min-w-max flex-row gap-4 p-4 md:p-5">
-                {groupedCases.map((column) => (
-                  <WorkflowLane
-                    key={column.key}
-                    column={column}
-                    isCollapsed={collapsedColumns.includes(column.key)}
-                    draggedCase={draggedCase}
-                    onToggle={() => toggleColumn(column.key)}
-                    onDragStart={(caseItem) => setDraggedCase(caseItem)}
-                    onDragEnd={() => setDraggedCase(null)}
-                    onDrop={(event) => handleDrop(event, column)}
-                  />
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
     </section>
   );
@@ -273,25 +256,30 @@ function WorkflowLane({
       }}
       onDrop={onDrop}
       className={cn(
-        "flex shrink-0 flex-col overflow-hidden rounded-lg border bg-muted/20 shadow-sm transition-[width,background-color,border-color] duration-300",
-        isCollapsed
-          ? "w-16 border-dashed bg-muted/35"
-          : "w-[300px] border-border bg-background",
+        "flex shrink-0 flex-col overflow-hidden rounded-[1.35rem] border bg-white shadow-xs transition-[width,background-color,border-color] duration-300",
+        isCollapsed ? "w-16 border-dashed bg-slate-50" : "w-[300px] border-border",
         canDrop && "border-primary bg-primary/5"
       )}
     >
       <div
         className={cn(
-          "flex items-center gap-3 border-b p-3",
+          "flex items-center gap-3 border-b border-border/70 p-3.5",
           isCollapsed ? "justify-center" : "justify-between"
         )}
       >
         {!isCollapsed && (
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold">{column.label}</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {column.cases.length} حالة
-            </p>
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-base font-extrabold text-foreground">
+                {column.label}
+              </h2>
+              <Badge
+                variant="outline"
+                className="rounded-full border-[#d6deee] bg-[#f5f8ff] px-2.5 py-0.5 text-[11px] font-bold text-[#415CB3]"
+              >
+                {column.cases.length} حالة
+              </Badge>
+            </div>
           </div>
         )}
         <Button
@@ -308,7 +296,10 @@ function WorkflowLane({
 
       {isCollapsed ? (
         <div className="flex flex-1 flex-col items-center gap-4 px-2 py-4">
-          <Badge variant="secondary" className="rounded-full">
+          <Badge
+            variant="outline"
+            className="rounded-full border-[#d6deee] bg-[#f5f8ff] text-[#415CB3]"
+          >
             {column.cases.length}
           </Badge>
           <span className="text-sm font-semibold text-foreground [text-orientation:mixed] [writing-mode:vertical-rl]">
@@ -316,7 +307,7 @@ function WorkflowLane({
           </span>
         </div>
       ) : (
-        <div className="flex flex-1 flex-col gap-3 p-3">
+        <div className="flex flex-1 flex-col gap-3 p-3.5">
           {column.cases.length === 0 ? (
             <div className="flex min-h-28 items-center justify-center rounded-lg border border-dashed bg-muted/20 px-4 text-center text-sm text-muted-foreground">
               لا توجد حالات
@@ -352,32 +343,34 @@ function CaseCard({
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className="block rounded-lg border bg-card p-4 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+      className="block rounded-[1.2rem] border border-border/80 bg-card p-4 shadow-2xs transition-all duration-150 hover:-translate-y-0.5 hover:border-[#cad5eb] hover:shadow-sm"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-primary">{caseItem.caseCode}</p>
-          <h3 className="mt-1 truncate font-semibold">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-extrabold tracking-tight text-primary">
+            {caseItem.caseCode}
+          </p>
+          <h3 className="truncate text-[1.03rem] font-extrabold text-foreground">
             {caseItem.customerName ?? "عميل غير محدد"}
           </h3>
         </div>
-        <div className="flex flex-col items-end gap-2">
-          <Badge variant="secondary">{caseItem.priority ?? "متوسطة"}</Badge>
-          <Badge variant="outline">{getCaseTypeLabel(caseItem.caseType)}</Badge>
+        <div className="flex flex-col items-end gap-1.5">
+          <CasePriorityBadge priority={caseItem.priority} />
+          <CaseTypeBadge caseType={caseItem.caseType} />
         </div>
       </div>
 
-      <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-        <p>
-          <span className="font-medium text-foreground">الجهاز: </span>
+      <div className="mt-3 space-y-2.5 text-sm text-muted-foreground">
+        <p className="leading-6">
+          <span className="font-bold text-foreground">الجهاز: </span>
           {getDeviceName(caseItem)}
         </p>
-        <p className="line-clamp-2">
-          <span className="font-medium text-foreground">المشكلة: </span>
+        <p className="line-clamp-2 leading-6">
+          <span className="font-bold text-foreground">المشكلة: </span>
           {caseItem.customerComplaint}
         </p>
-        <p>
-          <span className="font-medium text-foreground">الفني: </span>
+        <p className="text-[13px] font-medium text-[#415CB3]">
+          <span className="font-bold">الفني: </span>
           {caseItem.technicianName || "غير معين"}
         </p>
       </div>

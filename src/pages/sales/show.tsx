@@ -1,13 +1,12 @@
-import { ReactNode, useMemo, useRef, useState } from "react";
+import { ReactNode, useMemo, useState } from "react";
 import { useGetIdentity, useNotification, useOne } from "@refinedev/core";
 import { ArrowRight, CheckCircle2, FileText, Package2, Printer } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
-import { InvoicePrintSheet } from "@/components/invoices/invoice-print-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { exportElementToPdf } from "@/lib/report-export";
+import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { apiClient } from "@/providers/api-client";
 
 type CurrentUser = {
@@ -108,7 +107,6 @@ export function SalesDetailsPage() {
   const details = saleQuery.result;
   const sale = details?.invoice;
   const [isPrintingInvoice, setIsPrintingInvoice] = useState(false);
-  const printRef = useRef<HTMLDivElement | null>(null);
   const canConfirm = Boolean(
     sale &&
       sale.invoiceType === "direct_sale" &&
@@ -151,11 +149,37 @@ export function SalesDetailsPage() {
   );
 
   const handlePrintInvoice = async () => {
-    if (!sale || !printRef.current) return;
+    if (!sale) return;
 
     setIsPrintingInvoice(true);
     try {
-      await exportElementToPdf(printRef.current, `invoice-${sale.saleCode || sale.invoiceNumber}`);
+      await downloadInvoicePdf({
+        fileName: `sale-${sale.saleCode || sale.invoiceNumber}`,
+        invoiceCode: sale.saleCode || sale.invoiceNumber,
+        customerName: sale.customerName || sale.directCustomerName || "العميل",
+        customerPhone: sale.customerPhone || sale.directCustomerPhone || null,
+        invoiceDate: formatDate(sale.saleDate || sale.createdAt),
+        staffName: sale.createdByName || null,
+        caseCode: sale.caseCode || null,
+        deviceLabel: [sale.deviceBrand, sale.deviceApplianceType, sale.deviceModelName].filter(Boolean).join(" - ") || null,
+        notes: sale.notes || null,
+        subtotal: Number(sale.subtotal || 0),
+        discount: Number(sale.discount || 0),
+        tax: Number(sale.tax || 0),
+        total: Number(sale.total || 0),
+        items: printItems,
+      });
+      open?.({
+        type: "success",
+        message: "تم تنزيل الفاتورة",
+        description: "تم إنشاء ملف PDF وتنزيله بنجاح.",
+      });
+    } catch (error) {
+      open?.({
+        type: "error",
+        message: "تعذر تنزيل الفاتورة",
+        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع أثناء إنشاء ملف PDF.",
+      });
     } finally {
       setIsPrintingInvoice(false);
     }
@@ -215,25 +239,6 @@ export function SalesDetailsPage() {
 
       {sale ? (
         <>
-          <div className="fixed left-[-99999px] top-0 z-[-1]">
-            <div ref={printRef}>
-              <InvoicePrintSheet
-                invoiceCode={sale.saleCode || sale.invoiceNumber}
-                customerName={sale.customerName || sale.directCustomerName || "العميل"}
-                customerPhone={sale.customerPhone || sale.directCustomerPhone || null}
-                invoiceDate={formatDate(sale.saleDate || sale.createdAt)}
-                staffName={sale.createdByName || null}
-                caseCode={sale.caseCode || null}
-                deviceLabel={[sale.deviceBrand, sale.deviceApplianceType, sale.deviceModelName].filter(Boolean).join(" - ") || null}
-                notes={sale.notes || null}
-                subtotal={Number(sale.subtotal || 0)}
-                discount={Number(sale.discount || 0)}
-                tax={Number(sale.tax || 0)}
-                total={Number(sale.total || 0)}
-                items={printItems}
-              />
-            </div>
-          </div>
           <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
             <Card className="rounded-2xl border-border/70 bg-card/80">
               <CardHeader>
@@ -382,3 +387,4 @@ function TraceRow({
     </div>
   );
 }
+

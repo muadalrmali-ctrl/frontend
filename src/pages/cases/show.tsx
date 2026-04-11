@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useGetIdentity, useList, useNotification } from "@refinedev/core";
 import { useNavigate, useParams } from "react-router";
 import {
@@ -17,7 +17,6 @@ import {
   Trash2,
   Wrench,
 } from "lucide-react";
-import { InvoicePrintSheet } from "@/components/invoices/invoice-print-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,7 +54,7 @@ import {
   uploadCaseImageFile,
   uploadCaseVideoFile,
 } from "@/lib/case-media-upload";
-import { exportElementToPdf } from "@/lib/report-export";
+import { downloadInvoicePdf } from "@/lib/invoice-pdf";
 import { apiClient } from "@/providers/api-client";
 
 type CaseDetailsResponse = {
@@ -2204,8 +2203,8 @@ function CaseInvoicePdfButton({
   label: string;
   variant?: "default" | "outline" | "secondary" | "ghost";
 }) {
+  const { open } = useNotification();
   const [isExporting, setIsExporting] = useState(false);
-  const printRef = useRef<HTMLDivElement | null>(null);
   const { partsTotal, servicesTotal, invoiceTotal } = getInvoiceTotals(parts, services);
   const items = useMemo(() => getCaseInvoiceItems(parts, services), [parts, services]);
   const staffName =
@@ -2218,40 +2217,43 @@ function CaseInvoicePdfButton({
     .join(" - ");
 
   const handleExport = async () => {
-    if (!printRef.current) return;
-
     setIsExporting(true);
     try {
-      await exportElementToPdf(printRef.current, `invoice-${details.caseData.caseCode}`);
+      await downloadInvoicePdf({
+        fileName: `invoice-${details.caseData.caseCode}`,
+        invoiceCode: details.caseData.caseCode,
+        customerName: details.customer?.name || "العميل",
+        customerPhone: details.customer?.phone || null,
+        invoiceDate: formatInvoiceDate(details.caseData.operationFinalizedAt || details.caseData.updatedAt || details.caseData.createdAt),
+        staffName,
+        caseCode: details.caseData.caseCode,
+        deviceLabel: deviceLabel || null,
+        notes: details.caseData.postRepairNote || details.caseData.notes || null,
+        subtotal: partsTotal + servicesTotal,
+        total: invoiceTotal,
+        items,
+      });
+      open?.({
+        type: "success",
+        message: "تم تنزيل الفاتورة",
+        description: "تم إنشاء ملف PDF وتنزيله بنجاح.",
+      });
+    } catch (error) {
+      open?.({
+        type: "error",
+        message: "تعذر تنزيل الفاتورة",
+        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع أثناء إنشاء ملف PDF.",
+      });
     } finally {
       setIsExporting(false);
     }
   };
 
   return (
-    <>
-      <Button type="button" variant={variant} onClick={handleExport} disabled={isExporting}>
-        <Printer className="size-4" />
-        {isExporting ? "جاري تجهيز الفاتورة..." : label}
-      </Button>
-      <div className="fixed left-[-99999px] top-0 z-[-1]">
-        <div ref={printRef}>
-          <InvoicePrintSheet
-            invoiceCode={details.caseData.caseCode}
-            customerName={details.customer?.name || "العميل"}
-            customerPhone={details.customer?.phone || null}
-            invoiceDate={formatInvoiceDate(details.caseData.operationFinalizedAt || details.caseData.updatedAt || details.caseData.createdAt)}
-            staffName={staffName}
-            caseCode={details.caseData.caseCode}
-            deviceLabel={deviceLabel || null}
-            notes={details.caseData.postRepairNote || details.caseData.notes || null}
-            subtotal={partsTotal + servicesTotal}
-            total={invoiceTotal}
-            items={items}
-          />
-        </div>
-      </div>
-    </>
+    <Button type="button" variant={variant} onClick={handleExport} disabled={isExporting}>
+      <Printer className="size-4" />
+      {isExporting ? "جاري تجهيز الفاتورة..." : label}
+    </Button>
   );
 }
 
@@ -2343,4 +2345,5 @@ function ImageBox({ imageUrl, label, small }: { imageUrl?: string | null; label:
     </div>
   );
 }
+
 

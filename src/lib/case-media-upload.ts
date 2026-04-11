@@ -1,6 +1,8 @@
 import { apiClient } from "@/providers/api-client";
 
-export const MAX_CASE_MEDIA_FILE_BYTES = 5 * 1024 * 1024;
+export const MAX_CASE_IMAGE_FILE_BYTES = 5 * 1024 * 1024;
+export const MAX_CASE_VIDEO_FILE_BYTES = 25 * 1024 * 1024;
+export const MAX_CASE_MEDIA_FILE_BYTES = MAX_CASE_IMAGE_FILE_BYTES;
 
 const SUPPORTED_IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
@@ -9,7 +11,14 @@ const SUPPORTED_IMAGE_MIME_TYPES = new Set([
   "image/gif",
 ]);
 
-type CaseMediaCategory = "post_repair" | "damaged_part" | "waiting_part";
+const SUPPORTED_VIDEO_MIME_TYPES = new Set([
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+]);
+
+export type CaseMediaCategory = "post_repair" | "damaged_part" | "waiting_part";
+type UploadCaseMediaKind = "image" | "video";
 
 type UploadCaseMediaResponse = {
   id: number;
@@ -35,22 +44,34 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
   return btoa(binary);
 };
 
-const validateImageFile = (file: File) => {
-  if (!SUPPORTED_IMAGE_MIME_TYPES.has(file.type)) {
-    throw new Error("نوع الملف غير مدعوم. يرجى اختيار صورة PNG أو JPG أو WEBP أو GIF.");
+const validateCaseMediaFile = (file: File, kind: UploadCaseMediaKind) => {
+  const supportedMimeTypes = kind === "video" ? SUPPORTED_VIDEO_MIME_TYPES : SUPPORTED_IMAGE_MIME_TYPES;
+  const maxFileBytes = kind === "video" ? MAX_CASE_VIDEO_FILE_BYTES : MAX_CASE_IMAGE_FILE_BYTES;
+
+  if (!supportedMimeTypes.has(file.type)) {
+    throw new Error(
+      kind === "video"
+        ? "نوع الملف غير مدعوم. يرجى اختيار فيديو MP4 أو MOV أو WEBM."
+        : "نوع الملف غير مدعوم. يرجى اختيار صورة PNG أو JPG أو WEBP أو GIF."
+    );
   }
 
-  if (file.size > MAX_CASE_MEDIA_FILE_BYTES) {
-    throw new Error("حجم الملف كبير جدًا. الحد الأقصى المسموح به هو 5 ميجابايت.");
+  if (file.size > maxFileBytes) {
+    throw new Error(
+      kind === "video"
+        ? "حجم الفيديو كبير جداً. الحد الأقصى المسموح به هو 25 ميجابايت."
+        : "حجم الملف كبير جداً. الحد الأقصى المسموح به هو 5 ميجابايت."
+    );
   }
 };
 
-export const uploadCaseImageFile = async (input: {
+const uploadCaseMediaFile = async (input: {
   caseId: number;
   mediaCategory: CaseMediaCategory;
   file: File;
+  kind: UploadCaseMediaKind;
 }) => {
-  validateImageFile(input.file);
+  validateCaseMediaFile(input.file, input.kind);
 
   const contentBase64 = arrayBufferToBase64(await input.file.arrayBuffer());
 
@@ -67,3 +88,23 @@ export const uploadCaseImageFile = async (input: {
     },
   });
 };
+
+export const uploadCaseImageFile = (input: {
+  caseId: number;
+  mediaCategory: CaseMediaCategory;
+  file: File;
+}) =>
+  uploadCaseMediaFile({
+    ...input,
+    kind: "image",
+  });
+
+export const uploadCaseVideoFile = (input: {
+  caseId: number;
+  mediaCategory: CaseMediaCategory;
+  file: File;
+}) =>
+  uploadCaseMediaFile({
+    ...input,
+    kind: "video",
+  });

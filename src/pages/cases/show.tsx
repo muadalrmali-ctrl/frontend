@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useGetIdentity, useList, useNotification } from "@refinedev/core";
 import { useNavigate, useParams } from "react-router";
 import {
@@ -11,11 +11,13 @@ import {
   PauseCircle,
   PlayCircle,
   Plus,
+  Printer,
   RotateCcw,
   Send,
   Trash2,
   Wrench,
 } from "lucide-react";
+import { InvoicePrintSheet } from "@/components/invoices/invoice-print-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,7 +49,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { MAX_CASE_MEDIA_FILE_BYTES, uploadCaseImageFile } from "@/lib/case-media-upload";
+import {
+  MAX_CASE_MEDIA_FILE_BYTES,
+  MAX_CASE_VIDEO_FILE_BYTES,
+  uploadCaseImageFile,
+  uploadCaseVideoFile,
+} from "@/lib/case-media-upload";
+import { exportElementToPdf } from "@/lib/report-export";
 import { apiClient } from "@/providers/api-client";
 
 type CaseDetailsResponse = {
@@ -97,6 +105,7 @@ type CaseData = {
   postRepairCleaned?: boolean;
   postRepairRecommendations?: string | null;
   postRepairImages?: string | null;
+  postRepairVideos?: string | null;
   postRepairDamagedPartImages?: string | null;
   postRepairNote?: string | null;
   notRepairableReason?: string | null;
@@ -107,6 +116,7 @@ type CaseData = {
   operationFinalizedAt?: string | null;
   assignedTechnicianId?: number | null;
   createdAt?: string | null;
+  updatedAt?: string | null;
 };
 
 type Customer = { id: number; name: string; phone: string; address?: string | null };
@@ -327,6 +337,24 @@ const parseImageList = (value?: string | null) => {
 const stringifyImageList = (images: string[]) => JSON.stringify(images);
 const isPublicMediaUrl = (value: string) => /^https?:\/\//i.test(value.trim());
 const isPartReadyForExecution = (part: CasePart) => ["received", "consumed", "returned"].includes(part.handoffStatus || "pending");
+const formatInvoiceDate = (value?: string | null) =>
+  new Intl.DateTimeFormat("ar-LY", { dateStyle: "medium" }).format(value ? new Date(value) : new Date());
+const getCaseInvoiceItems = (parts: CasePart[], services: CaseService[]) => [
+  ...parts.map((part) => ({
+    id: `part-${part.id}`,
+    description: [part.inventoryName || "قطعة غيار", part.inventoryCode].filter(Boolean).join(" - "),
+    quantity: part.quantity,
+    unitPrice: toNumber(part.unitPrice),
+    total: toNumber(part.totalPrice),
+  })),
+  ...services.map((service) => ({
+    id: `service-${service.id}`,
+    description: service.serviceName,
+    quantity: service.quantity,
+    unitPrice: toNumber(service.unitPrice),
+    total: toNumber(service.totalPrice),
+  })),
+];
 const getTimelineLabel = (entry: CaseHistory) => {
   const note = entry.notes || "";
   if (note.includes("Customer approved")) return "موافقة العميل";
@@ -843,6 +871,12 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
               <Send />
               Send Diagnosis
             </Button>
+            <CaseInvoicePdfButton
+              details={details}
+              parts={parts}
+              services={services}
+              label="طباعة الفاتورة PDF"
+            />
           </div>
         </div>
         <Dialog open={isDiagnosisDialogOpen} onOpenChange={setIsDiagnosisDialogOpen}>
@@ -1653,6 +1687,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
   const [cleaned, setCleaned] = useState(Boolean(details.caseData.postRepairCleaned));
   const [recommendations, setRecommendations] = useState(details.caseData.postRepairRecommendations || "");
   const [repairImages, setRepairImages] = useState<string[]>(parseImageList(details.caseData.postRepairImages));
+  const [repairVideos, setRepairVideos] = useState<string[]>(parseImageList(details.caseData.postRepairVideos));
   const [damagedPartImages, setDamagedPartImages] = useState<string[]>(parseImageList(details.caseData.postRepairDamagedPartImages));
   const [note, setNote] = useState(details.caseData.postRepairNote || "");
   const [isReadyDialogOpen, setIsReadyDialogOpen] = useState(false);
@@ -1790,6 +1825,48 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
     }
   };
 
+  const uploadVideosToSupabase = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []).slice(0, 2 - repairVideos.length);
+    if (files.length === 0) return;
+
+    if (files.some((file) => file.size > MAX_CASE_VIDEO_FILE_BYTES)) {
+      setError("حجم الفيديو كبير جداً. الحد الأقصى المسموح به لكل فيديو هو 25 ميجابايت.");
+      return;
+    }
+
+    setIsUploadingRepairMedia(true);
+
+    try {
+      const uploadedVideos: string[] = [];
+
+      for (const file of files) {
+        const uploadedMedia = await uploadCaseVideoFile({
+          caseId: details.caseData.id,
+          mediaCategory: "post_repair",
+          file,
+        });
+        uploadedVideos.push(uploadedMedia.publicUrl);
+      }
+
+      const nextVideos = [...repairVideos, ...uploadedVideos].slice(0, 2);
+
+      await apiClient(`/api/cases/${details.caseData.id}`, {
+        method: "PATCH",
+        body: {
+          postRepairVideos: stringifyImageList(nextVideos),
+        },
+      });
+
+      setRepairVideos(nextVideos);
+      setError(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "تعذر رفع الفيديو");
+    } finally {
+      setIsUploadingRepairMedia(false);
+      event.target.value = "";
+    }
+  };
+
   const buildQualityPayload = () => ({
     postRepairCompletedWork: completedWork,
     postRepairTested: tested,
@@ -1797,6 +1874,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
     postRepairCleaned: cleaned,
     postRepairRecommendations: recommendations,
     postRepairImages: stringifyImageList(repairImages),
+    postRepairVideos: stringifyImageList(repairVideos),
     postRepairDamagedPartImages: stringifyImageList(damagedPartImages),
     postRepairNote: note,
   });
@@ -1879,6 +1957,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         <label className="flex items-center gap-2 rounded-lg border p-3"><input type="checkbox" checked={cleaned} onChange={(event) => setCleaned(event.target.checked)} /> تم تنظيف الجهاز</label>
         <Field label="نصائح فنية للعميل"><Textarea value={recommendations} onChange={(event) => setRecommendations(event.target.value)} /></Field>
         <ImageUploadGrid label="صور الجهاز بعد الإصلاح" images={repairImages} onUpload={(event) => uploadImagesToSupabase(event, setRepairImages, repairImages, "post_repair", "postRepairImages")} uploading={isUploadingRepairMedia} />
+        <VideoUploadGrid label="فيديو الجهاز بعد الإصلاح" videos={repairVideos} onUpload={uploadVideosToSupabase} uploading={isUploadingRepairMedia} />
         <ImageUploadGrid label="القطعة المعطوبة" images={damagedPartImages} onUpload={(event) => uploadImagesToSupabase(event, setDamagedPartImages, damagedPartImages, "damaged_part", "postRepairDamagedPartImages")} uploading={isUploadingRepairMedia} />
         <Field label="ملاحظة"><Textarea value={note} onChange={(event) => setNote(event.target.value)} /></Field>
       </CardContent>
@@ -1889,11 +1968,17 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         <InvoicePreview parts={parts} services={services} />
         <p className="text-sm text-muted-foreground">صور ما بعد الإصلاح والقطعة المعطوبة محفوظة مع الحالة ويمكن ربطها كمرفقات عند تفعيل تكامل WhatsApp/SMS لاحقا.</p>
         <div className="flex flex-wrap gap-3">
+          <CaseInvoicePdfButton
+            details={details}
+            parts={parts}
+            services={services}
+            label="طباعة الفاتورة PDF"
+          />
           <Button type="button" variant="outline" onClick={() => setIsReadyDialogOpen(true)}>
             <Send />
             Send Ready Message
           </Button>
-          <Button type="button" variant="outline" onClick={markReceived} disabled={!details.caseData.readyNotificationSentAt}>تم الاستلام</Button>
+          <Button type="button" variant="outline" onClick={markReceived}>تم الاستلام</Button>
           <Button type="button" onClick={finalizeOperation} disabled={!details.caseData.customerReceivedAt}>إنهاء العملية</Button>
         </div>
         <Dialog open={isReadyDialogOpen} onOpenChange={setIsReadyDialogOpen}>
@@ -2106,6 +2191,70 @@ function EditableInvoicePreview({
   );
 }
 
+function CaseInvoicePdfButton({
+  details,
+  parts,
+  services,
+  label,
+  variant = "outline",
+}: {
+  details: CaseDetailsResponse;
+  parts: CasePart[];
+  services: CaseService[];
+  label: string;
+  variant?: "default" | "outline" | "secondary" | "ghost";
+}) {
+  const [isExporting, setIsExporting] = useState(false);
+  const printRef = useRef<HTMLDivElement | null>(null);
+  const { partsTotal, servicesTotal, invoiceTotal } = getInvoiceTotals(parts, services);
+  const items = useMemo(() => getCaseInvoiceItems(parts, services), [parts, services]);
+  const staffName =
+    details.assignedTechnician?.name ||
+    details.caseData.technicianName ||
+    details.createdByUser?.name ||
+    "غير محدد";
+  const deviceLabel = [details.device?.brand, details.device?.applianceType, details.device?.modelName]
+    .filter(Boolean)
+    .join(" - ");
+
+  const handleExport = async () => {
+    if (!printRef.current) return;
+
+    setIsExporting(true);
+    try {
+      await exportElementToPdf(printRef.current, `invoice-${details.caseData.caseCode}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <>
+      <Button type="button" variant={variant} onClick={handleExport} disabled={isExporting}>
+        <Printer className="size-4" />
+        {isExporting ? "جاري تجهيز الفاتورة..." : label}
+      </Button>
+      <div className="fixed left-[-99999px] top-0 z-[-1]">
+        <div ref={printRef}>
+          <InvoicePrintSheet
+            invoiceCode={details.caseData.caseCode}
+            customerName={details.customer?.name || "العميل"}
+            customerPhone={details.customer?.phone || null}
+            invoiceDate={formatInvoiceDate(details.caseData.operationFinalizedAt || details.caseData.updatedAt || details.caseData.createdAt)}
+            staffName={staffName}
+            caseCode={details.caseData.caseCode}
+            deviceLabel={deviceLabel || null}
+            notes={details.caseData.postRepairNote || details.caseData.notes || null}
+            subtotal={partsTotal + servicesTotal}
+            total={invoiceTotal}
+            items={items}
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ImageUploadGrid({
   label,
   images,
@@ -2128,6 +2277,42 @@ function ImageUploadGrid({
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">لا توجد صور مرفوعة بعد</p>
         ) : (
           images.map((image, index) => <ImageBox key={`${label}-${index}`} imageUrl={image} label={`${label} ${index + 1}`} />)
+        )}
+      </div>
+    </div>
+  );
+}
+
+function VideoUploadGrid({
+  label,
+  videos,
+  uploading,
+  onUpload,
+}: {
+  label: string;
+  videos: string[];
+  uploading?: boolean;
+  onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <div className="grid gap-3 rounded-lg border p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Label>{label}</Label>
+        <Input className="max-w-sm" type="file" accept="video/mp4,video/quicktime,video/webm" onChange={onUpload} disabled={uploading} />
+      </div>
+      <p className="text-xs text-muted-foreground">الحد الأقصى للفيديو الواحد هو 25 ميجابايت، ويتم حفظه كرابط عام عبر Supabase Storage.</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {videos.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">لا توجد فيديوهات مرفوعة بعد</p>
+        ) : (
+          videos.map((video, index) => (
+            <div key={`${label}-${index}`} className="grid gap-2 rounded-lg border p-3">
+              <div className="aspect-video overflow-hidden rounded-lg border bg-black/90">
+                <video src={video} controls className="h-full w-full object-contain" />
+              </div>
+              <p className="text-xs text-muted-foreground">{label} {index + 1}</p>
+            </div>
+          ))
         )}
       </div>
     </div>

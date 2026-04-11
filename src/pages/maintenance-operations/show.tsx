@@ -55,6 +55,7 @@ export function MaintenanceOperationDetailsPage() {
 
   const caseData = details?.caseData;
   const repairImages = parseImages(caseData?.postRepairImages);
+  const repairVideos = parseImages(caseData?.postRepairVideos);
   const damagedImages = parseImages(caseData?.postRepairDamagedPartImages);
   const isUnrepaired = caseData?.status === "not_repairable";
 
@@ -93,6 +94,7 @@ export function MaintenanceOperationDetailsPage() {
           )}
           <InvoiceArchive parts={parts} services={services} />
           {!isUnrepaired && <ImageGrid title="صور الجهاز بعد الإصلاح" images={repairImages} />}
+          {!isUnrepaired && <VideoGrid title="فيديو الجهاز بعد الإصلاح" videos={repairVideos} />}
           {!isUnrepaired && <ImageGrid title="القطعة المعطوبة" images={damagedImages} />}
         </>
       )}
@@ -106,6 +108,25 @@ function Info({ label, value }: { label: string; value: string }) {
 
 function ImageGrid({ title, images }: { title: string; images: string[] }) {
   return <Card><CardHeader><CardTitle>{title}</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-4">{images.length === 0 ? <p className="text-muted-foreground">لا توجد صور</p> : images.map((image, index) => <img key={index} src={image} alt={`${title} ${index + 1}`} className="aspect-video rounded-lg border object-cover" />)}</CardContent></Card>;
+}
+
+function VideoGrid({ title, videos }: { title: string; videos: string[] }) {
+  return (
+    <Card>
+      <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-2">
+        {videos.length === 0 ? (
+          <p className="text-muted-foreground">لا توجد فيديوهات</p>
+        ) : (
+          videos.map((video, index) => (
+            <div key={index} className="overflow-hidden rounded-lg border bg-black">
+              <video src={video} controls className="aspect-video w-full object-contain" />
+            </div>
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function InvoiceArchive({ parts, services }: { parts: OperationPart[]; services: OperationService[] }) {

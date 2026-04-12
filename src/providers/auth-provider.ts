@@ -1,6 +1,7 @@
 import type { AuthProvider } from "@refinedev/core";
 import { apiClient, clearStoredAuth } from "./api-client";
 import { AUTH_TOKEN_KEY, AUTH_USER_KEY } from "./constants";
+import { getDefaultRouteForRole } from "@/lib/access-control";
 
 export type BackendUser = {
   id: number;
@@ -15,7 +16,7 @@ type LoginResponse = {
   token: string;
 };
 
-const getStoredUser = (): BackendUser | null => {
+export const getStoredUser = (): BackendUser | null => {
   const rawUser = localStorage.getItem(AUTH_USER_KEY);
   if (!rawUser) return null;
 
@@ -67,7 +68,7 @@ export const authProvider: AuthProvider = {
 
       return {
         success: true,
-        redirectTo: params.to ?? "/",
+        redirectTo: params.to ?? getDefaultRouteForRole(result.user.role),
       };
     } catch (error) {
       return {

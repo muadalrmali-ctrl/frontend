@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, type ReactNode } from "react";
 import { Authenticated, Refine } from "@refinedev/core";
 import { DevtoolsPanel, DevtoolsProvider } from "@refinedev/devtools";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
@@ -7,7 +7,7 @@ import routerProvider, {
   NavigateToResource,
   UnsavedChangesNotifier,
 } from "@refinedev/react-router";
-import { BrowserRouter, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import {
   BarChart3,
   Calculator,
@@ -23,7 +23,8 @@ import "./App.css";
 import { Toaster } from "./components/refine-ui/notification/toaster";
 import { useNotificationProvider } from "./components/refine-ui/notification/use-notification-provider";
 import { dataProvider } from "./providers/data";
-import { authProvider } from "./providers/auth-provider";
+import { authProvider, getStoredUser } from "./providers/auth-provider";
+import { canAccessResource, getDefaultRouteForRole } from "./lib/access-control";
 
 const Layout = lazy(() =>
   import("./components/refine-ui/layout/layout").then((module) => ({
@@ -100,6 +101,22 @@ function RouteFallback() {
   );
 }
 
+function ProtectedRoleRoute({
+  resource,
+  children,
+}: {
+  resource: string;
+  children: ReactNode;
+}) {
+  const role = getStoredUser()?.role;
+
+  if (!canAccessResource(role, resource)) {
+    return <Navigate to={getDefaultRouteForRole(role)} replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
   const isDev = import.meta.env.DEV;
 
@@ -119,6 +136,7 @@ function App() {
                 meta: {
                   label: "Dashboard",
                   icon: <Home size={16} />,
+                  roles: ["admin", "receptionist", "technician", "store_manager", "technician_manager", "maintenance_manager"],
                 },
               },
               {
@@ -129,6 +147,7 @@ function App() {
                 meta: {
                   label: "Cases",
                   icon: <ClipboardList size={16} />,
+                  roles: ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager"],
                 },
               },
               {
@@ -138,6 +157,7 @@ function App() {
                 meta: {
                   label: "Maintenance Operations",
                   icon: <Wrench size={16} />,
+                  roles: ["admin", "receptionist", "technician", "technician_manager", "maintenance_manager"],
                 },
               },
               {
@@ -147,6 +167,7 @@ function App() {
                 meta: {
                   label: "Inventory",
                   icon: <Package size={16} />,
+                  roles: ["admin", "store_manager"],
                 },
               },
               {
@@ -156,6 +177,7 @@ function App() {
                 meta: {
                   label: "Sales",
                   icon: <DollarSign size={16} />,
+                  roles: ["admin", "receptionist", "store_manager"],
                 },
               },
               {
@@ -164,6 +186,7 @@ function App() {
                 meta: {
                   label: "Reports",
                   icon: <BarChart3 size={16} />,
+                  roles: ["admin", "receptionist", "store_manager", "technician_manager", "maintenance_manager"],
                 },
               },
               {
@@ -172,6 +195,7 @@ function App() {
                 meta: {
                   label: "Accounting",
                   icon: <Calculator size={16} />,
+                  roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
                 },
               },
               {
@@ -182,6 +206,7 @@ function App() {
                   label: "Customers",
                   icon: <UserRound size={16} />,
                   parent: "accounting",
+                  roles: ["admin", "receptionist"],
                 },
               },
               {
@@ -192,6 +217,7 @@ function App() {
                   label: "Team",
                   icon: <Users size={16} />,
                   parent: "accounting",
+                  roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
                 },
               },
             ]}
@@ -216,7 +242,9 @@ function App() {
                   path="/invoice-preview/:source/:id"
                   element={
                     <Authenticated key="invoice-preview" redirectOnFail="/login">
-                      <InvoicePreviewPage />
+                      <ProtectedRoleRoute resource="invoice-preview">
+                        <InvoicePreviewPage />
+                      </ProtectedRoleRoute>
                     </Authenticated>
                   }
                 />
@@ -227,28 +255,28 @@ function App() {
                     </Authenticated>
                   }
                 >
-                  <Route index element={<DashboardPage />} />
-                  <Route path="cases" element={<CasesPage />} />
-                  <Route path="cases/create" element={<CreateCasePage />} />
-                  <Route path="cases/:id" element={<CaseDetailsPage />} />
+                  <Route index element={<ProtectedRoleRoute resource="dashboard"><DashboardPage /></ProtectedRoleRoute>} />
+                  <Route path="cases" element={<ProtectedRoleRoute resource="cases"><CasesPage /></ProtectedRoleRoute>} />
+                  <Route path="cases/create" element={<ProtectedRoleRoute resource="cases"><CreateCasePage /></ProtectedRoleRoute>} />
+                  <Route path="cases/:id" element={<ProtectedRoleRoute resource="cases"><CaseDetailsPage /></ProtectedRoleRoute>} />
                   <Route
                     path="maintenance-operations"
-                    element={<MaintenanceOperationsPage />}
+                    element={<ProtectedRoleRoute resource="maintenance-operations"><MaintenanceOperationsPage /></ProtectedRoleRoute>}
                   />
                   <Route
                     path="maintenance-operations/:id"
-                    element={<MaintenanceOperationDetailsPage />}
+                    element={<ProtectedRoleRoute resource="maintenance-operations"><MaintenanceOperationDetailsPage /></ProtectedRoleRoute>}
                   />
-                  <Route path="inventory" element={<InventoryPage />} />
-                  <Route path="inventory/:id" element={<InventoryDetailsPage />} />
-                  <Route path="sales" element={<SalesPage />} />
-                  <Route path="sales/:id" element={<SalesDetailsPage />} />
-                  <Route path="reports" element={<ReportsPage />} />
-                  <Route path="accounting" element={<AccountingPage />} />
-                  <Route path="accounting/customers" element={<CustomersPage />} />
-                  <Route path="accounting/customers/:id" element={<CustomerDetailsPage />} />
-                  <Route path="accounting/team" element={<TeamPage />} />
-                  <Route path="accounting/team/:id" element={<TeamMemberDetailsPage />} />
+                  <Route path="inventory" element={<ProtectedRoleRoute resource="inventory"><InventoryPage /></ProtectedRoleRoute>} />
+                  <Route path="inventory/:id" element={<ProtectedRoleRoute resource="inventory"><InventoryDetailsPage /></ProtectedRoleRoute>} />
+                  <Route path="sales" element={<ProtectedRoleRoute resource="sales"><SalesPage /></ProtectedRoleRoute>} />
+                  <Route path="sales/:id" element={<ProtectedRoleRoute resource="sales"><SalesDetailsPage /></ProtectedRoleRoute>} />
+                  <Route path="reports" element={<ProtectedRoleRoute resource="reports"><ReportsPage /></ProtectedRoleRoute>} />
+                  <Route path="accounting" element={<ProtectedRoleRoute resource="accounting"><AccountingPage /></ProtectedRoleRoute>} />
+                  <Route path="accounting/customers" element={<ProtectedRoleRoute resource="accounting-customers"><CustomersPage /></ProtectedRoleRoute>} />
+                  <Route path="accounting/customers/:id" element={<ProtectedRoleRoute resource="accounting-customers"><CustomerDetailsPage /></ProtectedRoleRoute>} />
+                  <Route path="accounting/team" element={<ProtectedRoleRoute resource="accounting-team"><TeamPage /></ProtectedRoleRoute>} />
+                  <Route path="accounting/team/:id" element={<ProtectedRoleRoute resource="accounting-team"><TeamMemberDetailsPage /></ProtectedRoleRoute>} />
                 </Route>
               </Routes>
             </Suspense>

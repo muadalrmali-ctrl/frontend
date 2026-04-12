@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ROLE_LABELS } from "@/lib/access-control";
 
 type TeamMember = {
   id: number;
@@ -34,14 +35,6 @@ type InvitationResult = {
   phone?: string | null;
   inviteUrl: string;
   token: string;
-};
-
-const roleLabels: Record<string, string> = {
-  technician: "فني صيانة",
-  technician_manager: "مسؤول الفنيين",
-  store_manager: "مسؤول مخزن",
-  receptionist: "موظف استقبال",
-  admin: "إدارة",
 };
 
 const avatarColors = [
@@ -255,7 +248,7 @@ function TechnicianCard({
         </div>
         <h2 className="text-lg font-semibold">{technician.name}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          {roleLabels[technician.role] ?? technician.role}
+          {ROLE_LABELS[technician.role as keyof typeof ROLE_LABELS] ?? technician.role}
         </p>
         <div className="mt-4 flex max-w-full items-center gap-2 text-sm text-muted-foreground">
           <Mail className="size-4 shrink-0" />

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ROLE_LABELS } from "@/lib/access-control";
 
 type TeamMemberDetails = {
   user: {
@@ -96,14 +97,6 @@ type TeamMemberDetails = {
   }>;
 };
 
-const roleLabels: Record<string, string> = {
-  technician: "فني صيانة",
-  technician_manager: "مسؤول الفنيين",
-  store_manager: "مسؤول مخزن",
-  receptionist: "موظف استقبال",
-  admin: "إدارة",
-};
-
 const formatDate = (value?: string | null) => {
   if (!value) return "غير متوفر";
   return new Intl.DateTimeFormat("ar-LY", {
@@ -159,7 +152,7 @@ export function TeamMemberDetailsPage() {
   const role = details?.user.role;
   const isTechnician = role === "technician" || role === "technician_manager";
   const isStoreManager = role === "store_manager";
-  const isSimpleRole = role === "receptionist" || role === "admin";
+  const isSimpleRole = role === "receptionist" || role === "admin" || role === "maintenance_manager";
 
   return (
     <section className="space-y-6" dir="rtl">
@@ -174,7 +167,7 @@ export function TeamMemberDetailsPage() {
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-3xl font-semibold">{details?.user.name || "تفاصيل عضو الفريق"}</h1>
-                {details?.user.role ? <Badge variant="outline">{roleLabels[details.user.role] || details.user.role}</Badge> : null}
+                {details?.user.role ? <Badge variant="outline">{ROLE_LABELS[details.user.role as keyof typeof ROLE_LABELS] || details.user.role}</Badge> : null}
                 {details?.user.status ? <Badge variant="outline">{details.user.status}</Badge> : null}
               </div>
               <p className="text-muted-foreground">
@@ -196,7 +189,7 @@ export function TeamMemberDetailsPage() {
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <Info label="الاسم الكامل" value={details.user.name} />
-              <Info label="الدور" value={roleLabels[details.user.role] || details.user.role} />
+              <Info label="الدور" value={ROLE_LABELS[details.user.role as keyof typeof ROLE_LABELS] || details.user.role} />
               <Info label="الهاتف" value={details.user.phone || "غير متوفر"} icon={<Phone className="size-4" />} />
               <Info label="البريد الإلكتروني" value={details.user.email} />
               <Info label="الحالة" value={details.user.status} />

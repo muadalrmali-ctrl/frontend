@@ -21,6 +21,8 @@ import {
   useSidebar as useShadcnSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { canAccessResource } from "@/lib/access-control";
+import { getStoredUser } from "@/providers/auth-provider";
 import {
   useLink,
   useMenu,
@@ -33,6 +35,10 @@ import React from "react";
 export function Sidebar() {
   const { open } = useShadcnSidebar();
   const { menuItems, selectedKey } = useMenu();
+  const role = getStoredUser()?.role;
+  const visibleMenuItems = menuItems
+    .map((item) => filterMenuItemByRole(item, role))
+    .filter((item): item is TreeMenuItem => Boolean(item));
 
   return (
     <ShadcnSidebar collapsible="icon" className={cn("border-none bg-sidebar")}>
@@ -47,7 +53,7 @@ export function Sidebar() {
           }
         )}
       >
-        {menuItems.map((item: TreeMenuItem) => (
+        {visibleMenuItems.map((item: TreeMenuItem) => (
           <SidebarItem
             key={item.key || item.name}
             item={item}
@@ -57,6 +63,27 @@ export function Sidebar() {
       </ShadcnSidebarContent>
     </ShadcnSidebar>
   );
+}
+
+function filterMenuItemByRole(item: TreeMenuItem, role: string | null | undefined): TreeMenuItem | null {
+  const children = item.children
+    ?.map((child) => filterMenuItemByRole(child, role))
+    .filter((child): child is TreeMenuItem => Boolean(child));
+
+  const metaRoles = item.meta?.roles as string[] | undefined;
+  const directResourceName = item.name;
+  const isAllowed =
+    (metaRoles ? metaRoles.includes(role ?? "") : directResourceName ? canAccessResource(role, directResourceName) : true) ||
+    Boolean(children?.length);
+
+  if (!isAllowed) {
+    return null;
+  }
+
+  return {
+    ...item,
+    children,
+  };
 }
 
 type MenuItemProps = {

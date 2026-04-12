@@ -85,6 +85,7 @@ export function LoginPage() {
                   <Label htmlFor="email">البريد الإلكتروني</Label>
                   <Input
                     id="email"
+                    name="email"
                     type="email"
                     autoComplete="email"
                     dir="ltr"
@@ -96,6 +97,8 @@ export function LoginPage() {
                 <div className="space-y-2">
                   <Label htmlFor="password">كلمة المرور</Label>
                   <InputPassword
+                    id="password"
+                    name="password"
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     autoComplete="current-password"

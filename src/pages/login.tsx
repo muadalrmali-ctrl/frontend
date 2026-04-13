@@ -22,11 +22,18 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const loginDebug = (event: string, payload?: unknown) => {
+    if (!import.meta.env.DEV) return;
+    console.info(`[login-page] ${event}`, payload);
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
+    loginDebug("submit", { email });
 
     const result = await login({ email, password });
+    loginDebug("result", result);
 
     if (!result.success) {
       setError(result.error?.message ?? "Login failed");

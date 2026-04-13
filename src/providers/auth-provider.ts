@@ -16,6 +16,11 @@ type LoginResponse = {
   token: string;
 };
 
+const authDebug = (event: string, payload?: unknown) => {
+  if (!import.meta.env.DEV) return;
+  console.info(`[auth] ${event}`, payload);
+};
+
 export const getStoredUser = (): BackendUser | null => {
   const rawUser = localStorage.getItem(AUTH_USER_KEY);
   if (!rawUser) return null;
@@ -55,6 +60,7 @@ const toIdentity = (user: BackendUser) => {
 export const authProvider: AuthProvider = {
   async login(params) {
     try {
+      authDebug("login:start", { email: params.email, to: params.to });
       const result = await apiClient<LoginResponse>("/api/auth/login", {
         method: "POST",
         body: {
@@ -66,11 +72,18 @@ export const authProvider: AuthProvider = {
       localStorage.setItem(AUTH_TOKEN_KEY, result.token);
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(result.user));
 
+      authDebug("login:success", {
+        user: result.user,
+        tokenStored: Boolean(localStorage.getItem(AUTH_TOKEN_KEY)),
+        userStored: Boolean(getStoredUser()),
+      });
+
       return {
         success: true,
         redirectTo: params.to ?? getDefaultRouteForRole(result.user.role),
       };
     } catch (error) {
+      authDebug("login:error", error);
       return {
         success: false,
         error: error instanceof Error ? error : new Error("Login failed"),
@@ -79,6 +92,7 @@ export const authProvider: AuthProvider = {
   },
 
   async logout() {
+    authDebug("logout");
     clearStoredAuth();
 
     return {
@@ -89,8 +103,14 @@ export const authProvider: AuthProvider = {
 
   async check() {
     const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    const user = getStoredUser();
 
-    if (!token || isTokenExpired(token)) {
+    if (!token || !user || isTokenExpired(token)) {
+      authDebug("check:unauthenticated", {
+        hasToken: Boolean(token),
+        hasUser: Boolean(user),
+        tokenExpired: token ? isTokenExpired(token) : null,
+      });
       clearStoredAuth();
 
       return {
@@ -99,6 +119,10 @@ export const authProvider: AuthProvider = {
         logout: true,
       };
     }
+
+    authDebug("check:authenticated", {
+      user,
+    });
 
     return {
       authenticated: true,
@@ -115,7 +139,8 @@ export const authProvider: AuthProvider = {
   },
 
   async onError(error) {
-    if (error?.statusCode === 401 || error?.statusCode === 403) {
+    if (error?.statusCode === 401) {
+      authDebug("onError:logout-on-401", error);
       clearStoredAuth();
 
       return {
@@ -123,6 +148,13 @@ export const authProvider: AuthProvider = {
         redirectTo: "/login",
       };
     }
+
+    if (error?.statusCode === 403) {
+      authDebug("onError:ignore-403", error);
+      return {};
+    }
+
+    authDebug("onError:pass-through", error);
 
     return {};
   },

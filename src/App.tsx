@@ -4,7 +4,6 @@ import { DevtoolsPanel, DevtoolsProvider } from "@refinedev/devtools";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
 import routerProvider, {
   DocumentTitleHandler,
-  NavigateToResource,
   UnsavedChangesNotifier,
 } from "@refinedev/react-router";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
@@ -25,6 +24,11 @@ import { useNotificationProvider } from "./components/refine-ui/notification/use
 import { dataProvider } from "./providers/data";
 import { authProvider, getStoredUser } from "./providers/auth-provider";
 import { canAccessResource, getDefaultRouteForRole } from "./lib/access-control";
+
+const routeDebug = (event: string, payload?: unknown) => {
+  if (!import.meta.env.DEV) return;
+  console.info(`[routing] ${event}`, payload);
+};
 
 const Layout = lazy(() =>
   import("./components/refine-ui/layout/layout").then((module) => ({
@@ -111,10 +115,26 @@ function ProtectedRoleRoute({
   const role = getStoredUser()?.role;
 
   if (!canAccessResource(role, resource)) {
+    routeDebug("blocked-resource", {
+      role,
+      resource,
+      redirectTo: getDefaultRouteForRole(role),
+    });
     return <Navigate to={getDefaultRouteForRole(role)} replace />;
   }
 
+  routeDebug("allowed-resource", { role, resource });
+
   return <>{children}</>;
+}
+
+function LoginSuccessRedirect() {
+  const role = getStoredUser()?.role;
+  const redirectTo = getDefaultRouteForRole(role);
+
+  routeDebug("login-success-redirect", { role, redirectTo });
+
+  return <Navigate to={redirectTo} replace />;
 }
 
 function App() {
@@ -233,7 +253,7 @@ function App() {
                   path="/login"
                   element={
                     <Authenticated key="login" fallback={<LoginPage />}>
-                      <NavigateToResource resource="dashboard" />
+                      <LoginSuccessRedirect />
                     </Authenticated>
                   }
                 />

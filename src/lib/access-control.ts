@@ -10,10 +10,10 @@ export const APP_ROLES = [
 export type AppRole = (typeof APP_ROLES)[number];
 
 export const ROLE_LABELS: Record<AppRole, string> = {
-  admin: "إدارة",
+  admin: "مسؤول إدارة",
   receptionist: "موظف استقبال",
-  technician: "فني صيانة",
-  store_manager: "مسؤول مخزن",
+  technician: "فني",
+  store_manager: "مدير مخزن",
   technician_manager: "مسؤول الفنيين",
   maintenance_manager: "مدير الصيانة",
 };
@@ -55,4 +55,29 @@ export const getDefaultRouteForRole = (role: string | null | undefined) => {
     default:
       return "/";
   }
+};
+
+export const canViewInvitations = (role: string | null | undefined) =>
+  role === "admin" ||
+  role === "receptionist" ||
+  role === "technician_manager" ||
+  role === "maintenance_manager";
+
+export const canManageInvitations = (role: string | null | undefined) =>
+  role === "admin" || role === "technician_manager" || role === "maintenance_manager";
+
+export const getAllowedInvitationRoles = (role: string | null | undefined): AppRole[] => {
+  if (role === "admin") {
+    return [...APP_ROLES];
+  }
+
+  if (role === "maintenance_manager") {
+    return ["technician", "store_manager", "receptionist"];
+  }
+
+  if (role === "technician_manager") {
+    return ["technician"];
+  }
+
+  return [];
 };

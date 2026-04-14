@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { useCreate, useList } from "@refinedev/core";
-import { Copy, Eye, Mail, Plus, UserRound, Warehouse } from "lucide-react";
+import { Copy, Eye, Link2, Mail, Plus, ShieldCheck, UserRound, XCircle } from "lucide-react";
 import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +15,23 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ROLE_LABELS } from "@/lib/access-control";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  canManageInvitations,
+  canViewInvitations,
+  getAllowedInvitationRoles,
+  ROLE_LABELS,
+  type AppRole,
+} from "@/lib/access-control";
+import { apiClient } from "@/providers/api-client";
+import { getStoredUser } from "@/providers/auth-provider";
 
 type TeamMember = {
   id: number;
@@ -25,16 +41,25 @@ type TeamMember = {
   createdAt?: string | null;
 };
 
-type InvitationRole = "technician" | "store_manager";
-
-type InvitationResult = {
+type InvitationRecord = {
   id: number;
-  role: InvitationRole;
-  status: string;
+  role: AppRole;
+  status: "pending" | "used" | "expired" | "revoked";
   name?: string | null;
+  email?: string | null;
   phone?: string | null;
-  inviteUrl: string;
-  token: string;
+  inviteUrl?: string | null;
+  expiresAt: string;
+  createdAt?: string | null;
+};
+
+type InvitationFormState = {
+  role: AppRole;
+  name: string;
+  email: string;
+  phone: string;
+  notes: string;
+  expiresInDays: string;
 };
 
 const avatarColors = [
@@ -45,169 +70,421 @@ const avatarColors = [
   "bg-cyan-100 text-cyan-700",
 ];
 
+const statusLabels: Record<InvitationRecord["status"], string> = {
+  pending: "قيد الانتظار",
+  used: "مستخدمة",
+  expired: "منتهية",
+  revoked: "ملغاة",
+};
+
+const statusVariants: Record<
+  InvitationRecord["status"],
+  "default" | "secondary" | "destructive" | "outline"
+> = {
+  pending: "default",
+  used: "secondary",
+  expired: "outline",
+  revoked: "destructive",
+};
+
+const formatDate = (value?: string | null) => {
+  if (!value) return "غير متوفر";
+  return new Intl.DateTimeFormat("ar-EG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+};
+
+const resolveInviteUrl = (value?: string | null) => {
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${window.location.origin}${value.startsWith("/") ? value : `/${value}`}`;
+};
+
 export function TeamPage() {
+  const currentRole = getStoredUser()?.role ?? null;
+  const canManage = canManageInvitations(currentRole);
+  const canView = canViewInvitations(currentRole);
+  const allowedRoles = getAllowedInvitationRoles(currentRole);
+  const defaultRole = allowedRoles[0] ?? "technician";
+
   const { result, query } = useList<TeamMember>({
     resource: "accounting-team",
   });
+  const {
+    result: invitationsResult,
+    query: invitationsQuery,
+  } = useList<InvitationRecord>({
+    resource: "invitations",
+    queryOptions: {
+      enabled: canView,
+    },
+  });
   const { mutateAsync: createInvitation, mutation } = useCreate();
-  const teamMembers = result.data ?? [];
-  const [inviteRole, setInviteRole] = useState<InvitationRole | null>(null);
-  const [inviteName, setInviteName] = useState("");
-  const [invitePhone, setInvitePhone] = useState("");
-  const [inviteResult, setInviteResult] = useState<InvitationResult | null>(null);
-  const [inviteError, setInviteError] = useState<string | null>(null);
 
-  const openInviteDialog = (role: InvitationRole) => {
-    setInviteRole(role);
-    setInviteName("");
-    setInvitePhone("");
-    setInviteResult(null);
+  const teamMembers = result.data ?? [];
+  const invitations = invitationsResult.data ?? [];
+
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteResult, setInviteResult] = useState<InvitationRecord | null>(null);
+  const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [form, setForm] = useState<InvitationFormState>({
+    role: defaultRole,
+    name: "",
+    email: "",
+    phone: "",
+    notes: "",
+    expiresInDays: "7",
+  });
+
+  const openInviteDialog = () => {
+    setForm({
+      role: defaultRole,
+      name: "",
+      email: "",
+      phone: "",
+      notes: "",
+      expiresInDays: "7",
+    });
     setInviteError(null);
+    setInviteResult(null);
+    setIsDialogOpen(true);
   };
 
   const handleCreateInvitation = async () => {
-    if (!inviteRole) return;
-
     try {
       setInviteError(null);
-      const result = (await createInvitation({
+      const response = (await createInvitation({
         resource: "invitations",
         values: {
-          role: inviteRole,
-          name: inviteName || undefined,
-          phone: invitePhone || undefined,
+          role: form.role,
+          name: form.name || undefined,
+          email: form.email || undefined,
+          phone: form.phone || undefined,
+          notes: form.notes || undefined,
+          expiresInDays: Number(form.expiresInDays || 7),
         },
-      })) as { data: InvitationResult };
+      })) as { data: InvitationRecord };
 
-      setInviteResult(result.data);
+      setInviteResult(response.data);
+      invitationsQuery.refetch();
     } catch (error) {
-      setInviteError(
-        error instanceof Error ? error.message : "تعذر إنشاء الدعوة"
-      );
+      setInviteError(error instanceof Error ? error.message : "تعذر إنشاء الدعوة");
     }
   };
 
+  const handleRevokeInvitation = async (invitationId: number) => {
+    try {
+      setRevokingId(invitationId);
+      await apiClient(`/api/invitations/${invitationId}/revoke`, {
+        method: "PATCH",
+      });
+      invitationsQuery.refetch();
+    } catch (error) {
+      setInviteError(error instanceof Error ? error.message : "تعذر إلغاء الدعوة");
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const pendingInvitationsCount = useMemo(
+    () => invitations.filter((invitation) => invitation.status === "pending").length,
+    [invitations]
+  );
+
   return (
-    <section className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <section className="space-y-6" dir="rtl">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold">الفريق</h1>
+          <h1 className="text-3xl font-semibold">الفريق والدعوات</h1>
           <p className="text-muted-foreground">
-            بطاقات الفنيين المتاحين لتعيين حالات الصيانة.
+            إدارة أعضاء الفريق الحاليين وإنشاء روابط دعوات صالحة للتسجيل الذاتي.
           </p>
         </div>
-        <Badge variant="outline" className="w-fit">
-          {teamMembers.length} عضو
-        </Badge>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button type="button" onClick={() => openInviteDialog("technician")}>
-            <Plus />
-            إضافة فني
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => openInviteDialog("store_manager")}
-          >
-            <Warehouse />
-            إضافة مسؤول مخزن
-          </Button>
+
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">{teamMembers.length} عضو في الفريق</Badge>
+          {canView ? <Badge variant="outline">{pendingInvitationsCount} دعوة نشطة</Badge> : null}
+          {canManage ? (
+            <Button type="button" onClick={openInviteDialog}>
+              <Plus className="size-4" />
+              إنشاء دعوة جديدة
+            </Button>
+          ) : null}
         </div>
       </div>
 
-      {query.isLoading && (
-        <p className="text-muted-foreground">جاري تحميل الفنيين...</p>
-      )}
-      {query.error && (
+      {query.isLoading ? <p className="text-muted-foreground">جارٍ تحميل أعضاء الفريق...</p> : null}
+      {query.error ? (
         <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {query.error.message}
         </p>
-      )}
-      {!query.isLoading && !query.error && teamMembers.length === 0 && (
+      ) : null}
+
+      {!query.isLoading && !query.error && teamMembers.length === 0 ? (
         <div className="rounded-lg border border-dashed bg-card p-8 text-center text-muted-foreground">
-          لا يوجد فنيون.
+          لا يوجد أعضاء في الفريق حاليًا.
         </div>
-      )}
-      {!query.isLoading && !query.error && teamMembers.length > 0 && (
+      ) : null}
+
+      {!query.isLoading && !query.error && teamMembers.length > 0 ? (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {teamMembers.map((technician, index) => (
-            <TechnicianCard
-              key={technician.id}
-              technician={technician}
+          {teamMembers.map((member, index) => (
+            <TeamMemberCard
+              key={member.id}
+              member={member}
               colorClass={avatarColors[index % avatarColors.length]}
             />
           ))}
         </div>
-      )}
+      ) : null}
 
-      <Dialog open={inviteRole !== null} onOpenChange={(open) => !open && setInviteRole(null)}>
+      {canView ? (
+        <Card className="rounded-2xl border-border/70">
+          <CardHeader className="space-y-2">
+            <CardTitle className="flex items-center gap-2">
+              <Link2 className="size-5" />
+              إدارة الدعوات
+            </CardTitle>
+            <CardDescription>
+              كل دعوة تنشئ رابطًا مباشرًا لصفحة إنشاء الحساب، مع صلاحية محددة وإلغاء يدوي عند الحاجة.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {inviteError ? (
+              <p className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {inviteError}
+              </p>
+            ) : null}
+
+            {invitationsQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">جارٍ تحميل الدعوات...</p>
+            ) : invitationsQuery.error ? (
+              <p className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {invitationsQuery.error.message}
+              </p>
+            ) : invitations.length === 0 ? (
+              <div className="rounded-xl border border-dashed bg-muted/10 p-6 text-center text-sm text-muted-foreground">
+                لا توجد دعوات بعد.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">الدور</TableHead>
+                    <TableHead className="text-right">المدعو</TableHead>
+                    <TableHead className="text-right">الحالة</TableHead>
+                    <TableHead className="text-right">الإنشاء</TableHead>
+                    <TableHead className="text-right">الانتهاء</TableHead>
+                    <TableHead className="text-right">الرابط</TableHead>
+                    <TableHead className="text-right">إجراءات</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invitations.map((invitation) => (
+                    <TableRow key={invitation.id}>
+                      <TableCell>
+                        {ROLE_LABELS[invitation.role] ?? invitation.role}
+                      </TableCell>
+                      <TableCell>
+                        <div className="space-y-1">
+                          <p className="font-medium">{invitation.name || "بدون اسم"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {[invitation.email, invitation.phone].filter(Boolean).join(" • ") || "بدون بريد أو هاتف"}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={statusVariants[invitation.status]}>
+                          {statusLabels[invitation.status]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatDate(invitation.createdAt)}</TableCell>
+                      <TableCell>{formatDate(invitation.expiresAt)}</TableCell>
+                      <TableCell>
+                        {invitation.inviteUrl ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              navigator.clipboard?.writeText(resolveInviteUrl(invitation.inviteUrl))
+                            }
+                          >
+                            <Copy className="size-4" />
+                            نسخ الرابط
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">غير متوفر</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {canManage && invitation.status === "pending" ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRevokeInvitation(invitation.id)}
+                            disabled={revokingId === invitation.id}
+                          >
+                            <XCircle className="size-4" />
+                            {revokingId === invitation.id ? "جارٍ الإلغاء..." : "إلغاء"}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">لا يوجد</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent dir="rtl">
           <DialogHeader>
-            <DialogTitle>
-              {inviteRole === "store_manager" ? "إضافة مسؤول مخزن" : "إضافة فني"}
-            </DialogTitle>
+            <DialogTitle>إنشاء دعوة جديدة</DialogTitle>
             <DialogDescription>
-              أنشئ رابط دعوة مؤقت، وسيقوم الموظف بإكمال البريد وكلمة المرور بنفسه.
+              سينتج عن هذه العملية رابط دعوة صالح للاستخدام مرة واحدة لإنشاء الحساب.
             </DialogDescription>
           </DialogHeader>
 
           {!inviteResult ? (
             <div className="grid gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="inviteName">الاسم</Label>
-                <Input
-                  id="inviteName"
-                  value={inviteName}
-                  onChange={(event) => setInviteName(event.target.value)}
-                />
+                <Label htmlFor="invite-role">الدور</Label>
+                <Select
+                  value={form.role}
+                  onValueChange={(value) => setForm((current) => ({ ...current, role: value as AppRole }))}
+                >
+                  <SelectTrigger id="invite-role" className="w-full">
+                    <SelectValue placeholder="اختر الدور" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allowedRoles.map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {ROLE_LABELS[role]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+
+              <div className="grid gap-2 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="invite-name">الاسم</Label>
+                  <Input
+                    id="invite-name"
+                    value={form.name}
+                    onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="invite-phone">الهاتف</Label>
+                  <Input
+                    id="invite-phone"
+                    dir="ltr"
+                    value={form.phone}
+                    onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="invite-email">البريد الإلكتروني</Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    dir="ltr"
+                    value={form.email}
+                    onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="invite-expiry">مدة الصلاحية بالأيام</Label>
+                  <Input
+                    id="invite-expiry"
+                    type="number"
+                    min={1}
+                    max={30}
+                    dir="ltr"
+                    value={form.expiresInDays}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, expiresInDays: event.target.value }))
+                    }
+                  />
+                </div>
+              </div>
+
               <div className="grid gap-2">
-                <Label htmlFor="invitePhone">الهاتف</Label>
+                <Label htmlFor="invite-notes">ملاحظات</Label>
                 <Input
-                  id="invitePhone"
-                  value={invitePhone}
-                  onChange={(event) => setInvitePhone(event.target.value)}
+                  id="invite-notes"
+                  value={form.notes}
+                  onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
                 />
               </div>
-              {inviteError && (
-                <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {inviteError}
-                </p>
-              )}
             </div>
           ) : (
-            <div className="grid gap-3">
-              <Label htmlFor="inviteUrl">رابط الدعوة</Label>
-              <div className="flex gap-2">
-                <Input id="inviteUrl" readOnly value={inviteResult.inviteUrl} />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => navigator.clipboard?.writeText(inviteResult.inviteUrl)}
-                >
-                  <Copy />
-                  نسخ
-                </Button>
+            <div className="space-y-4">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                تم إنشاء الدعوة بنجاح. يمكنك الآن نسخ الرابط وإرساله للمستخدم.
               </div>
-              <p className="text-sm text-muted-foreground">
-                أرسل هذا الرابط للموظف ليكمل التسجيل بكلمة مرور يختارها بنفسه.
-              </p>
+
+              <div className="grid gap-2">
+                <Label htmlFor="created-invite-url">رابط الدعوة</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="created-invite-url"
+                    readOnly
+                    value={resolveInviteUrl(inviteResult.inviteUrl)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      navigator.clipboard?.writeText(resolveInviteUrl(inviteResult.inviteUrl))
+                    }
+                  >
+                    <Copy className="size-4" />
+                    نسخ
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-2">
+                <InfoTile label="الدور" value={ROLE_LABELS[inviteResult.role] ?? inviteResult.role} />
+                <InfoTile label="تاريخ الانتهاء" value={formatDate(inviteResult.expiresAt)} />
+              </div>
             </div>
           )}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setInviteRole(null)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setIsDialogOpen(false);
+                setInviteError(null);
+              }}
+            >
               إغلاق
             </Button>
-            {!inviteResult && (
+            {!inviteResult ? (
               <Button
                 type="button"
                 onClick={handleCreateInvitation}
-                disabled={mutation.isPending}
+                disabled={mutation.isPending || allowedRoles.length === 0}
               >
-                إنشاء الدعوة
+                <ShieldCheck className="size-4" />
+                {mutation.isPending ? "جارٍ الإنشاء..." : "إنشاء الدعوة"}
               </Button>
-            )}
+            ) : null}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -215,56 +492,65 @@ export function TeamPage() {
   );
 }
 
-function TechnicianCard({
-  technician,
+function TeamMemberCard({
+  member,
   colorClass,
 }: {
-  technician: TeamMember;
+  member: TeamMember;
   colorClass: string;
 }) {
   const initials = useMemo(
     () =>
-      technician.name
+      member.name
         .split(" ")
         .filter(Boolean)
         .slice(0, 2)
         .map((part) => part[0])
         .join(""),
-    [technician.name]
+    [member.name]
   );
 
   return (
     <Card className="group overflow-hidden rounded-lg border bg-card shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
-      <Link to={`/accounting/team/${technician.id}`}>
-      <CardContent className="flex min-h-56 flex-col items-center justify-center p-6 text-center">
-        <div
-          className={`mb-5 flex size-24 items-center justify-center rounded-full ${colorClass} shadow-inner`}
-        >
-          {initials ? (
-            <span className="text-2xl font-semibold">{initials}</span>
-          ) : (
-            <UserRound className="size-9" />
-          )}
-        </div>
-        <h2 className="text-lg font-semibold">{technician.name}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {ROLE_LABELS[technician.role as keyof typeof ROLE_LABELS] ?? technician.role}
-        </p>
-        <div className="mt-4 flex max-w-full items-center gap-2 text-sm text-muted-foreground">
-          <Mail className="size-4 shrink-0" />
-          <span className="truncate">{technician.email}</span>
-        </div>
-      </CardContent>
+      <Link to={`/accounting/team/${member.id}`}>
+        <CardContent className="flex min-h-56 flex-col items-center justify-center p-6 text-center">
+          <div
+            className={`mb-5 flex size-24 items-center justify-center rounded-full ${colorClass} shadow-inner`}
+          >
+            {initials ? (
+              <span className="text-2xl font-semibold">{initials}</span>
+            ) : (
+              <UserRound className="size-9" />
+            )}
+          </div>
+          <h2 className="text-lg font-semibold">{member.name}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {ROLE_LABELS[member.role as keyof typeof ROLE_LABELS] ?? member.role}
+          </p>
+          <div className="mt-4 flex max-w-full items-center gap-2 text-sm text-muted-foreground">
+            <Mail className="size-4 shrink-0" />
+            <span className="truncate">{member.email}</span>
+          </div>
+        </CardContent>
       </Link>
-      <CardFooter className="flex justify-between border-t bg-muted/20 px-4 py-3 text-sm">
-        <span className="text-muted-foreground">جاهز للتعيين</span>
+      <div className="flex items-center justify-between border-t bg-muted/20 px-4 py-3 text-sm">
+        <span className="text-muted-foreground">ملف العضو</span>
         <Button type="button" variant="ghost" size="sm" className="gap-2" asChild>
-          <Link to={`/accounting/team/${technician.id}`}>
-          <Eye className="size-4" />
-          عرض
+          <Link to={`/accounting/team/${member.id}`}>
+            <Eye className="size-4" />
+            عرض
           </Link>
         </Button>
-      </CardFooter>
+      </div>
     </Card>
+  );
+}
+
+function InfoTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-muted/20 p-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="mt-1 font-medium">{value}</p>
+    </div>
   );
 }

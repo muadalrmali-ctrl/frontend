@@ -258,6 +258,7 @@ function App() {
                   }
                 />
                 <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+                <Route path="/invite/:token" element={<AcceptInvitationPage />} />
                 <Route
                   path="/invoice-preview/:source/:id"
                   element={

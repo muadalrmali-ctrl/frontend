@@ -4,7 +4,9 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { hasPermission } from "@/lib/access-control";
 import { apiClient } from "@/providers/api-client";
+import { getStoredUser } from "@/providers/auth-provider";
 
 type OperationDetails = {
   caseData: any;
@@ -33,6 +35,12 @@ const toNumber = (value?: string | number | null) => Number(value || 0);
 const formatMoney = (value: number) => `${value.toLocaleString("ar-LY")} د.ل`;
 
 export function MaintenanceOperationDetailsPage() {
+  const currentUser = getStoredUser();
+  const canViewQualityData = hasPermission(currentUser, "maintenance_operations.quality_saved_data.view");
+  const canViewFinalInvoice = hasPermission(currentUser, "maintenance_operations.final_invoice.view");
+  const canViewRepairImages = hasPermission(currentUser, "maintenance_operations.after_repair_image.view");
+  const canViewRepairVideos = hasPermission(currentUser, "maintenance_operations.after_repair_video.view");
+  const canViewDamagedPartImages = hasPermission(currentUser, "maintenance_operations.damaged_part_image.view");
   const { id } = useParams();
   const [details, setDetails] = useState<OperationDetails | null>(null);
   const [parts, setParts] = useState<OperationPart[]>([]);
@@ -84,18 +92,18 @@ export function MaintenanceOperationDetailsPage() {
                 <Info label="السبب" value={caseData.notRepairableReason || caseData.finalResult || "غير محدد"} />
               </CardContent>
             </Card>
-          ) : (
+          ) : canViewQualityData ? (
             <Card><CardHeader><CardTitle>فحص الجودة والبيانات المحفوظة</CardTitle></CardHeader><CardContent className="grid gap-3 md:grid-cols-3">
               <Info label="اختبار الجهاز" value={caseData.postRepairTested ? `نعم - ${caseData.postRepairTestCount || 1} مرات` : "لا"} />
               <Info label="تنظيف الجهاز" value={caseData.postRepairCleaned ? "نعم" : "لا"} />
               <Info label="نصائح فنية" value={caseData.postRepairRecommendations || "غير محدد"} />
               <Info label="ملاحظة الفني" value={caseData.postRepairNote || "غير محدد"} />
             </CardContent></Card>
-          )}
-          <InvoiceArchive parts={parts} services={services} />
-          {!isUnrepaired && <ImageGrid title="صور الجهاز بعد الإصلاح" images={repairImages} />}
-          {!isUnrepaired && <VideoGrid title="فيديو الجهاز بعد الإصلاح" videos={repairVideos} />}
-          {!isUnrepaired && <ImageGrid title="القطعة المعطوبة" images={damagedImages} />}
+          ) : null}
+          {canViewFinalInvoice ? <InvoiceArchive parts={parts} services={services} /> : null}
+          {!isUnrepaired && canViewRepairImages ? <ImageGrid title="صور الجهاز بعد الإصلاح" images={repairImages} /> : null}
+          {!isUnrepaired && canViewRepairVideos ? <VideoGrid title="فيديو الجهاز بعد الإصلاح" videos={repairVideos} /> : null}
+          {!isUnrepaired && canViewDamagedPartImages ? <ImageGrid title="القطعة المعطوبة" images={damagedImages} /> : null}
         </>
       )}
     </section>

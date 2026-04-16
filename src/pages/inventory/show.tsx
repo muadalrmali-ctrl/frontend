@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import { useGetIdentity, useList, useNotification, useOne } from "@refinedev/core";
+import { useList, useNotification, useOne } from "@refinedev/core";
 import { ArrowRight, Edit3, Package, PencilLine, Trash2, Warehouse } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -12,14 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { hasPermission } from "@/lib/access-control";
 import { apiClient } from "@/providers/api-client";
-
-type CurrentUser = {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-};
+import { getStoredUser } from "@/providers/auth-provider";
 
 type InventoryCategory = {
   id: number;
@@ -127,7 +122,7 @@ export function InventoryDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { open } = useNotification();
-  const { data: currentUser } = useGetIdentity<CurrentUser>();
+  const currentUser = getStoredUser();
   const productId = Number(id);
   const { result, query } = useOne<ProductDetails>({
     resource: "inventory",
@@ -142,7 +137,10 @@ export function InventoryDetailsPage() {
 
   const item = result ?? null;
   const categories = categoriesQuery.result.data ?? [];
-  const isAdmin = currentUser?.role === "admin";
+  const canEditItem = hasPermission(currentUser, "inventory.item.edit");
+  const canAdjustQuantity = hasPermission(currentUser, "inventory.item.quantity.update");
+  const canDeleteItem = hasPermission(currentUser, "inventory.item.delete");
+  const hasAdminActions = canEditItem || canAdjustQuantity || canDeleteItem;
 
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isQuantityDialogOpen, setIsQuantityDialogOpen] = useState(false);
@@ -307,24 +305,30 @@ export function InventoryDetailsPage() {
             </p>
           )}
 
-          {isAdmin && (
+          {hasAdminActions && (
             <Card className="rounded-lg">
               <CardHeader className="pb-3">
                 <CardTitle>إجراءات الإدارة</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                <Button type="button" onClick={() => setIsQuantityDialogOpen(true)}>
-                  <Edit3 />
-                  تحديث الكمية
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(true)}>
-                  <PencilLine />
-                  تحديث البيانات
-                </Button>
-                <Button type="button" variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
-                  <Trash2 />
-                  حذف
-                </Button>
+                {canAdjustQuantity ? (
+                  <Button type="button" onClick={() => setIsQuantityDialogOpen(true)}>
+                    <Edit3 />
+                    تحديث الكمية
+                  </Button>
+                ) : null}
+                {canEditItem ? (
+                  <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(true)}>
+                    <PencilLine />
+                    تحديث البيانات
+                  </Button>
+                ) : null}
+                {canDeleteItem ? (
+                  <Button type="button" variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
+                    <Trash2 />
+                    حذف
+                  </Button>
+                ) : null}
               </CardContent>
             </Card>
           )}
@@ -480,7 +484,7 @@ export function InventoryDetailsPage() {
         </>
       )}
 
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog open={canEditItem && isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-3xl" dir="rtl">
           <DialogHeader>
             <DialogTitle>تحديث بيانات القطعة</DialogTitle>
@@ -517,7 +521,7 @@ export function InventoryDetailsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isQuantityDialogOpen} onOpenChange={setIsQuantityDialogOpen}>
+      <Dialog open={canAdjustQuantity && isQuantityDialogOpen} onOpenChange={setIsQuantityDialogOpen}>
         <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>تحديث الكمية</DialogTitle>
@@ -536,7 +540,7 @@ export function InventoryDetailsPage() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog open={canDeleteItem && isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>حذف القطعة</AlertDialogTitle>

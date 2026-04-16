@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useMemo, useState } from "react";
-import { useGetIdentity, useList, useNotification } from "@refinedev/core";
+import { useList, useNotification } from "@refinedev/core";
 import { CheckCircle2, FileText, PackagePlus, Plus, ReceiptText, Search } from "lucide-react";
 import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
@@ -10,14 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { hasPermission } from "@/lib/access-control";
 import { apiClient } from "@/providers/api-client";
-
-type CurrentUser = {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-};
+import { getStoredUser } from "@/providers/auth-provider";
 
 type SaleRecord = {
   id: number;
@@ -94,7 +89,8 @@ const createEmptyLine = (): SaleFormLine => ({
 });
 
 export function SalesPage() {
-  const { data: currentUser } = useGetIdentity<CurrentUser>();
+  const currentUser = getStoredUser();
+  const canCreateSale = hasPermission(currentUser, "sales.create");
   const { open } = useNotification();
   const [search, setSearch] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -244,10 +240,12 @@ export function SalesPage() {
             label="المبيعات المؤكدة"
             value={String(sales.filter((sale) => sale.status === "paid").length)}
           />
-          <Button type="button" onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus className="size-4" />
-            بيع مباشر جديد
-          </Button>
+          {canCreateSale ? (
+            <Button type="button" onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="size-4" />
+              بيع مباشر جديد
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -325,14 +323,15 @@ export function SalesPage() {
         </CardContent>
       </Card>
 
-      <Dialog
-        open={isCreateDialogOpen}
-        onOpenChange={(open) => {
-          setIsCreateDialogOpen(open);
-          if (!open) resetForm();
-        }}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl" dir="rtl">
+      {canCreateSale ? (
+        <Dialog
+          open={isCreateDialogOpen}
+          onOpenChange={(open) => {
+            setIsCreateDialogOpen(open);
+            if (!open) resetForm();
+          }}
+        >
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl" dir="rtl">
           <DialogHeader>
             <DialogTitle>بيع مباشر جديد</DialogTitle>
             <DialogDescription>
@@ -429,8 +428,9 @@ export function SalesPage() {
               </Button>
             </DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </section>
   );
 }

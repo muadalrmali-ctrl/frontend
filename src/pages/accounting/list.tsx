@@ -3,8 +3,14 @@ import type { ReactNode } from "react";
 import { UserRound, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { hasPermission } from "@/lib/access-control";
+import { getStoredUser } from "@/providers/auth-provider";
 
 export function AccountingPage() {
+  const currentUser = getStoredUser();
+  const canViewCustomers = hasPermission(currentUser, "accounting.customers.view");
+  const canViewTeam = hasPermission(currentUser, "accounting.team.view");
+
   return (
     <section className="space-y-6">
       <div>
@@ -12,20 +18,24 @@ export function AccountingPage() {
         <p className="text-muted-foreground">Manage accounting from this screen.</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <AccountingSectionCard
-          icon={<UserRound className="size-5" />}
-          title="Customers"
-          description="Customer records now live inside Accounting."
-          to="/accounting/customers"
-          actionLabel="Open customers"
-        />
-        <AccountingSectionCard
-          icon={<Users className="size-5" />}
-          title="Team"
-          description="Technicians and team records are managed from Accounting."
-          to="/accounting/team"
-          actionLabel="Open team"
-        />
+        {canViewCustomers ? (
+          <AccountingSectionCard
+            icon={<UserRound className="size-5" />}
+            title="Customers"
+            description="Customer records now live inside Accounting."
+            to="/accounting/customers"
+            actionLabel="Open customers"
+          />
+        ) : null}
+        {canViewTeam ? (
+          <AccountingSectionCard
+            icon={<Users className="size-5" />}
+            title="Team"
+            description="Technicians and team records are managed from Accounting."
+            to="/accounting/team"
+            actionLabel="Open team"
+          />
+        ) : null}
       </div>
     </section>
   );

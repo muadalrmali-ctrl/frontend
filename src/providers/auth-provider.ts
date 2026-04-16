@@ -1,13 +1,14 @@
 import type { AuthProvider } from "@refinedev/core";
 import { apiClient, clearStoredAuth } from "./api-client";
 import { AUTH_TOKEN_KEY, AUTH_USER_KEY } from "./constants";
-import { getDefaultRouteForRole } from "@/lib/access-control";
+import { getDefaultRouteForUser } from "@/lib/access-control";
 
 export type BackendUser = {
   id: number;
   name: string;
   email: string;
   role: string;
+  permissions: string[];
   createdAt?: string | null;
 };
 
@@ -80,7 +81,7 @@ export const authProvider: AuthProvider = {
 
       return {
         success: true,
-        redirectTo: params.to ?? getDefaultRouteForRole(result.user.role),
+        redirectTo: params.to ?? getDefaultRouteForUser(result.user),
       };
     } catch (error) {
       authDebug("login:error", error);
@@ -135,7 +136,13 @@ export const authProvider: AuthProvider = {
   },
 
   async getPermissions() {
-    return getStoredUser()?.role ?? null;
+    const user = getStoredUser();
+    if (!user) return null;
+
+    return {
+      role: user.role,
+      permissions: user.permissions ?? [],
+    };
   },
 
   async onError(error) {

@@ -23,7 +23,7 @@ import { Toaster } from "./components/refine-ui/notification/toaster";
 import { useNotificationProvider } from "./components/refine-ui/notification/use-notification-provider";
 import { dataProvider } from "./providers/data";
 import { authProvider, getStoredUser } from "./providers/auth-provider";
-import { canAccessResource, getDefaultRouteForRole } from "./lib/access-control";
+import { canAccessResource, getDefaultRouteForUser, hasAnyPermission } from "./lib/access-control";
 
 const routeDebug = (event: string, payload?: unknown) => {
   if (!import.meta.env.DEV) return;
@@ -105,34 +105,37 @@ function RouteFallback() {
   );
 }
 
-function ProtectedRoleRoute({
+function ProtectedAccessRoute({
   resource,
+  requiredPermissions,
   children,
 }: {
   resource: string;
+  requiredPermissions?: string[];
   children: ReactNode;
 }) {
-  const role = getStoredUser()?.role;
+  const user = getStoredUser();
 
-  if (!canAccessResource(role, resource)) {
+  if (!canAccessResource(user, resource) || (requiredPermissions?.length && !hasAnyPermission(user, requiredPermissions))) {
     routeDebug("blocked-resource", {
-      role,
+      user,
       resource,
-      redirectTo: getDefaultRouteForRole(role),
+      requiredPermissions,
+      redirectTo: getDefaultRouteForUser(user),
     });
-    return <Navigate to={getDefaultRouteForRole(role)} replace />;
+    return <Navigate to={getDefaultRouteForUser(user)} replace />;
   }
 
-  routeDebug("allowed-resource", { role, resource });
+  routeDebug("allowed-resource", { user, resource, requiredPermissions });
 
   return <>{children}</>;
 }
 
 function LoginSuccessRedirect() {
-  const role = getStoredUser()?.role;
-  const redirectTo = getDefaultRouteForRole(role);
+  const user = getStoredUser();
+  const redirectTo = getDefaultRouteForUser(user);
 
-  routeDebug("login-success-redirect", { role, redirectTo });
+  routeDebug("login-success-redirect", { user, redirectTo });
 
   return <Navigate to={redirectTo} replace />;
 }
@@ -263,9 +266,9 @@ function App() {
                   path="/invoice-preview/:source/:id"
                   element={
                     <Authenticated key="invoice-preview" redirectOnFail="/login">
-                      <ProtectedRoleRoute resource="invoice-preview">
+                      <ProtectedAccessRoute resource="invoice-preview">
                         <InvoicePreviewPage />
-                      </ProtectedRoleRoute>
+                      </ProtectedAccessRoute>
                     </Authenticated>
                   }
                 />
@@ -276,28 +279,28 @@ function App() {
                     </Authenticated>
                   }
                 >
-                  <Route index element={<ProtectedRoleRoute resource="dashboard"><DashboardPage /></ProtectedRoleRoute>} />
-                  <Route path="cases" element={<ProtectedRoleRoute resource="cases"><CasesPage /></ProtectedRoleRoute>} />
-                  <Route path="cases/create" element={<ProtectedRoleRoute resource="cases"><CreateCasePage /></ProtectedRoleRoute>} />
-                  <Route path="cases/:id" element={<ProtectedRoleRoute resource="cases"><CaseDetailsPage /></ProtectedRoleRoute>} />
+                  <Route index element={<ProtectedAccessRoute resource="dashboard"><DashboardPage /></ProtectedAccessRoute>} />
+                  <Route path="cases" element={<ProtectedAccessRoute resource="cases"><CasesPage /></ProtectedAccessRoute>} />
+                  <Route path="cases/create" element={<ProtectedAccessRoute resource="cases" requiredPermissions={["cases.create"]}><CreateCasePage /></ProtectedAccessRoute>} />
+                  <Route path="cases/:id" element={<ProtectedAccessRoute resource="cases"><CaseDetailsPage /></ProtectedAccessRoute>} />
                   <Route
                     path="maintenance-operations"
-                    element={<ProtectedRoleRoute resource="maintenance-operations"><MaintenanceOperationsPage /></ProtectedRoleRoute>}
+                    element={<ProtectedAccessRoute resource="maintenance-operations"><MaintenanceOperationsPage /></ProtectedAccessRoute>}
                   />
                   <Route
                     path="maintenance-operations/:id"
-                    element={<ProtectedRoleRoute resource="maintenance-operations"><MaintenanceOperationDetailsPage /></ProtectedRoleRoute>}
+                    element={<ProtectedAccessRoute resource="maintenance-operations"><MaintenanceOperationDetailsPage /></ProtectedAccessRoute>}
                   />
-                  <Route path="inventory" element={<ProtectedRoleRoute resource="inventory"><InventoryPage /></ProtectedRoleRoute>} />
-                  <Route path="inventory/:id" element={<ProtectedRoleRoute resource="inventory"><InventoryDetailsPage /></ProtectedRoleRoute>} />
-                  <Route path="sales" element={<ProtectedRoleRoute resource="sales"><SalesPage /></ProtectedRoleRoute>} />
-                  <Route path="sales/:id" element={<ProtectedRoleRoute resource="sales"><SalesDetailsPage /></ProtectedRoleRoute>} />
-                  <Route path="reports" element={<ProtectedRoleRoute resource="reports"><ReportsPage /></ProtectedRoleRoute>} />
-                  <Route path="accounting" element={<ProtectedRoleRoute resource="accounting"><AccountingPage /></ProtectedRoleRoute>} />
-                  <Route path="accounting/customers" element={<ProtectedRoleRoute resource="accounting-customers"><CustomersPage /></ProtectedRoleRoute>} />
-                  <Route path="accounting/customers/:id" element={<ProtectedRoleRoute resource="accounting-customers"><CustomerDetailsPage /></ProtectedRoleRoute>} />
-                  <Route path="accounting/team" element={<ProtectedRoleRoute resource="accounting-team"><TeamPage /></ProtectedRoleRoute>} />
-                  <Route path="accounting/team/:id" element={<ProtectedRoleRoute resource="accounting-team"><TeamMemberDetailsPage /></ProtectedRoleRoute>} />
+                  <Route path="inventory" element={<ProtectedAccessRoute resource="inventory"><InventoryPage /></ProtectedAccessRoute>} />
+                  <Route path="inventory/:id" element={<ProtectedAccessRoute resource="inventory"><InventoryDetailsPage /></ProtectedAccessRoute>} />
+                  <Route path="sales" element={<ProtectedAccessRoute resource="sales"><SalesPage /></ProtectedAccessRoute>} />
+                  <Route path="sales/:id" element={<ProtectedAccessRoute resource="sales"><SalesDetailsPage /></ProtectedAccessRoute>} />
+                  <Route path="reports" element={<ProtectedAccessRoute resource="reports"><ReportsPage /></ProtectedAccessRoute>} />
+                  <Route path="accounting" element={<ProtectedAccessRoute resource="accounting"><AccountingPage /></ProtectedAccessRoute>} />
+                  <Route path="accounting/customers" element={<ProtectedAccessRoute resource="accounting-customers"><CustomersPage /></ProtectedAccessRoute>} />
+                  <Route path="accounting/customers/:id" element={<ProtectedAccessRoute resource="accounting-customers"><CustomerDetailsPage /></ProtectedAccessRoute>} />
+                  <Route path="accounting/team" element={<ProtectedAccessRoute resource="accounting-team"><TeamPage /></ProtectedAccessRoute>} />
+                  <Route path="accounting/team/:id" element={<ProtectedAccessRoute resource="accounting-team"><TeamMemberDetailsPage /></ProtectedAccessRoute>} />
                 </Route>
               </Routes>
             </Suspense>

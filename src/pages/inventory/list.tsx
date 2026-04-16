@@ -35,6 +35,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { hasPermission } from "@/lib/access-control";
+import { getStoredUser } from "@/providers/auth-provider";
 
 type InventoryItem = {
   id: number;
@@ -121,6 +123,8 @@ const formatPrice = (value?: string | null) => {
 };
 
 export function InventoryPage() {
+  const currentUser = getStoredUser();
+  const canCreateItem = hasPermission(currentUser, "inventory.item.create");
   const { result, query } = useList<InventoryItem>({
     resource: "inventory",
   });
@@ -278,10 +282,12 @@ export function InventoryPage() {
               Box View
             </Button>
           </div>
-          <Button type="button" onClick={() => setIsAddDialogOpen(true)}>
-            <PackagePlus />
-            إضافة قطعة
-          </Button>
+          {canCreateItem ? (
+            <Button type="button" onClick={() => setIsAddDialogOpen(true)}>
+              <PackagePlus />
+              إضافة قطعة
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -338,147 +344,149 @@ export function InventoryPage() {
         </>
       )}
 
-      <Dialog
-        open={isAddDialogOpen}
-        onOpenChange={(open) => {
-          setIsAddDialogOpen(open);
-          if (!open) resetForm();
-        }}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" dir="rtl">
-          <DialogHeader>
-            <DialogTitle>إضافة قطعة</DialogTitle>
-            <DialogDescription>
-              أضف بيانات القطعة، وسيتم حساب الحالة تلقائيا من الكمية.
-            </DialogDescription>
-          </DialogHeader>
+      {canCreateItem ? (
+        <Dialog
+          open={isAddDialogOpen}
+          onOpenChange={(open) => {
+            setIsAddDialogOpen(open);
+            if (!open) resetForm();
+          }}
+        >
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl" dir="rtl">
+            <DialogHeader>
+              <DialogTitle>إضافة قطعة</DialogTitle>
+              <DialogDescription>
+                أضف بيانات القطعة، وسيتم حساب الحالة تلقائيا من الكمية.
+              </DialogDescription>
+            </DialogHeader>
 
-          <form className="space-y-5" onSubmit={handleSubmit}>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="الاسم">
-                <Input
-                  value={form.name}
-                  onChange={(event) => setField("name", event.target.value)}
-                  required
-                />
-              </Field>
-              <Field label="الكود">
-                <Input
-                  value={form.code}
-                  onChange={(event) => setField("code", event.target.value)}
-                  required
-                />
-              </Field>
-              <Field label="الفئة">
-                <Select
-                  value={form.categoryId}
-                  onValueChange={(value) => setField("categoryId", value)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="اختر الفئة" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">بدون فئة</SelectItem>
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={String(category.id)}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field label="الماركة">
-                <Input
-                  value={form.brand}
-                  onChange={(event) => setField("brand", event.target.value)}
-                />
-              </Field>
-              <Field label="الكمية">
-                <Input
-                  type="number"
-                  min="0"
-                  value={form.quantity}
-                  onChange={(event) => setField("quantity", event.target.value)}
-                  required
-                />
-              </Field>
-              <Field label="السعر">
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.001"
-                  value={form.price}
-                  onChange={(event) => setField("price", event.target.value)}
-                  required
-                />
-              </Field>
-              <Field label="حد التنبيه للكمية المنخفضة">
-                <Input
-                  type="number"
-                  min="0"
-                  value={form.minimumStock}
-                  onChange={(event) =>
-                    setField("minimumStock", event.target.value)
-                  }
-                />
-              </Field>
-              <Field label="رابط الصورة">
-                <Input
-                  value={form.imageUrl.startsWith("data:") ? "" : form.imageUrl}
-                  onChange={(event) => setField("imageUrl", event.target.value)}
-                  placeholder="https://..."
-                />
-              </Field>
-            </div>
-
-            <div className="grid gap-3">
-              <Label>صورة القطعة</Label>
-              <div className="grid gap-4 rounded-lg border bg-muted/20 p-4 sm:grid-cols-[180px_1fr]">
-                <ImagePreview imageUrl={form.imageUrl} name={form.name} />
-                <div className="flex flex-col justify-center gap-3">
-                  <Label
-                    htmlFor="inventory-image"
-                    className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm shadow-xs"
-                  >
-                    <Upload className="size-4" />
-                    رفع صورة صغيرة
-                  </Label>
+            <form className="space-y-5" onSubmit={handleSubmit}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="الاسم">
                   <Input
-                    id="inventory-image"
-                    className="hidden"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageFileChange}
+                    value={form.name}
+                    onChange={(event) => setField("name", event.target.value)}
+                    required
                   />
-                  <p className="text-sm text-muted-foreground">
-                    يمكن استخدام رابط صورة أو رفع صورة صغيرة مؤقتا. التخزين
-                    الخارجي للصور يمكن ربطه لاحقا بدون تغيير شكل البيانات.
-                  </p>
+                </Field>
+                <Field label="الكود">
+                  <Input
+                    value={form.code}
+                    onChange={(event) => setField("code", event.target.value)}
+                    required
+                  />
+                </Field>
+                <Field label="الفئة">
+                  <Select
+                    value={form.categoryId}
+                    onValueChange={(value) => setField("categoryId", value)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="اختر الفئة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون فئة</SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category.id} value={String(category.id)}>
+                          {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="الماركة">
+                  <Input
+                    value={form.brand}
+                    onChange={(event) => setField("brand", event.target.value)}
+                  />
+                </Field>
+                <Field label="الكمية">
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.quantity}
+                    onChange={(event) => setField("quantity", event.target.value)}
+                    required
+                  />
+                </Field>
+                <Field label="السعر">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={form.price}
+                    onChange={(event) => setField("price", event.target.value)}
+                    required
+                  />
+                </Field>
+                <Field label="حد التنبيه للكمية المنخفضة">
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.minimumStock}
+                    onChange={(event) =>
+                      setField("minimumStock", event.target.value)
+                    }
+                  />
+                </Field>
+                <Field label="رابط الصورة">
+                  <Input
+                    value={form.imageUrl.startsWith("data:") ? "" : form.imageUrl}
+                    onChange={(event) => setField("imageUrl", event.target.value)}
+                    placeholder="https://..."
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-3">
+                <Label>صورة القطعة</Label>
+                <div className="grid gap-4 rounded-lg border bg-muted/20 p-4 sm:grid-cols-[180px_1fr]">
+                  <ImagePreview imageUrl={form.imageUrl} name={form.name} />
+                  <div className="flex flex-col justify-center gap-3">
+                    <Label
+                      htmlFor="inventory-image"
+                      className="inline-flex w-fit cursor-pointer items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm shadow-xs"
+                    >
+                      <Upload className="size-4" />
+                      رفع صورة صغيرة
+                    </Label>
+                    <Input
+                      id="inventory-image"
+                      className="hidden"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageFileChange}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      يمكن استخدام رابط صورة أو رفع صورة صغيرة مؤقتا. التخزين
+                      الخارجي للصور يمكن ربطه لاحقا بدون تغيير شكل البيانات.
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {formError && (
-              <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {formError}
-              </p>
-            )}
+              {formError && (
+                <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {formError}
+                </p>
+              )}
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsAddDialogOpen(false)}
-              >
-                إلغاء
-              </Button>
-              <Button type="submit" disabled={mutation.isPending}>
-                إضافة قطعة
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAddDialogOpen(false)}
+                >
+                  إلغاء
+                </Button>
+                <Button type="submit" disabled={mutation.isPending}>
+                  إضافة قطعة
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </section>
   );
 }

@@ -35,9 +35,9 @@ import React from "react";
 export function Sidebar() {
   const { open } = useShadcnSidebar();
   const { menuItems, selectedKey } = useMenu();
-  const role = getStoredUser()?.role;
+  const user = getStoredUser();
   const visibleMenuItems = menuItems
-    .map((item) => filterMenuItemByRole(item, role))
+    .map((item) => filterMenuItemByAccess(item, user))
     .filter((item): item is TreeMenuItem => Boolean(item));
 
   return (
@@ -65,15 +65,14 @@ export function Sidebar() {
   );
 }
 
-function filterMenuItemByRole(item: TreeMenuItem, role: string | null | undefined): TreeMenuItem | null {
+function filterMenuItemByAccess(item: TreeMenuItem, user: ReturnType<typeof getStoredUser>): TreeMenuItem | null {
   const children = item.children
-    ?.map((child) => filterMenuItemByRole(child, role))
+    ?.map((child) => filterMenuItemByAccess(child, user))
     .filter((child): child is TreeMenuItem => Boolean(child));
 
-  const metaRoles = item.meta?.roles as string[] | undefined;
   const directResourceName = item.name;
   const isAllowed =
-    (metaRoles ? metaRoles.includes(role ?? "") : directResourceName ? canAccessResource(role, directResourceName) : true) ||
+    (directResourceName ? canAccessResource(user, directResourceName) : true) ||
     Boolean(children?.length);
 
   if (!isAllowed) {

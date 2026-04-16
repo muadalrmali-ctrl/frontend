@@ -14,8 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { REPORT_CATEGORY_PERMISSION_MAP, hasPermission } from "@/lib/access-control";
 import { exportElementToPdf, exportReportToExcel } from "@/lib/report-export";
 import { apiClient } from "@/providers/api-client";
+import { getStoredUser } from "@/providers/auth-provider";
 
 type ReportCategory = "cases" | "technicians" | "inventory" | "sales" | "customers" | "operations";
 
@@ -169,6 +171,7 @@ const defaultDateTo = today.toISOString().slice(0, 10);
 const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
 
 export function ReportsPage() {
+  const currentUser = getStoredUser();
   const { open } = useNotification();
   const reportRef = useRef<HTMLDivElement | null>(null);
   const [category, setCategory] = useState<ReportCategory>("cases");
@@ -187,6 +190,19 @@ export function ReportsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const categoryDefinition = REPORT_DEFINITIONS[category];
+  const allowedCategories = useMemo(
+    () =>
+      (Object.keys(REPORT_DEFINITIONS) as ReportCategory[]).filter((key) =>
+        hasPermission(currentUser, REPORT_CATEGORY_PERMISSION_MAP[key])
+      ),
+    [currentUser]
+  );
+
+  useEffect(() => {
+    if (!allowedCategories.length) return;
+    if (allowedCategories.includes(category)) return;
+    setCategory(allowedCategories[0]);
+  }, [allowedCategories, category]);
 
   useEffect(() => {
     let isMounted = true;
@@ -302,7 +318,9 @@ export function ReportsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {(Object.entries(REPORT_DEFINITIONS) as Array<[ReportCategory, ReportDefinition]>).map(([key, definition]) => (
+        {(Object.entries(REPORT_DEFINITIONS) as Array<[ReportCategory, ReportDefinition]>)
+          .filter(([key]) => allowedCategories.includes(key))
+          .map(([key, definition]) => (
           <button
             key={key}
             type="button"
@@ -338,9 +356,11 @@ export function ReportsPage() {
               <Select value={category} onValueChange={(value) => setCategory(value as ReportCategory)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(Object.entries(REPORT_DEFINITIONS) as Array<[ReportCategory, ReportDefinition]>).map(([key, definition]) => (
+                  {(Object.entries(REPORT_DEFINITIONS) as Array<[ReportCategory, ReportDefinition]>)
+                    .filter(([key]) => allowedCategories.includes(key))
+                    .map(([key, definition]) => (
                     <SelectItem key={key} value={key}>{definition.label}</SelectItem>
-                  ))}
+                    ))}
                 </SelectContent>
               </Select>
             </Field>

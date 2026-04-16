@@ -1,19 +1,14 @@
 import { ReactNode } from "react";
-import { useGetIdentity, useNotification, useOne } from "@refinedev/core";
+import { useNotification, useOne } from "@refinedev/core";
 import { ArrowRight, CheckCircle2, FileText, Package2 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { hasPermission } from "@/lib/access-control";
 import { apiClient } from "@/providers/api-client";
-
-type CurrentUser = {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-};
+import { getStoredUser } from "@/providers/auth-provider";
 
 type SaleDetails = {
   invoice: {
@@ -89,7 +84,7 @@ export function SalesDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { open } = useNotification();
-  const { data: currentUser } = useGetIdentity<CurrentUser>();
+  const currentUser = getStoredUser();
   const saleId = Number(id);
   const saleQuery = useOne<SaleDetails>({
     resource: "sales",
@@ -109,7 +104,7 @@ export function SalesDetailsPage() {
     sale &&
       sale.invoiceType === "direct_sale" &&
       sale.status !== "paid" &&
-      (currentUser?.role === "store_manager" || currentUser?.role === "admin")
+      hasPermission(currentUser, "sales.confirm")
   );
 
   const confirmSale = async () => {

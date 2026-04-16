@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { AlertTriangle, Check, ShieldCheck } from "lucide-react";
 import type { BackendUser } from "@/providers/auth-provider";
-import { getDefaultRouteForRole, ROLE_LABELS } from "@/lib/access-control";
+import { getDefaultRouteForUser, ROLE_LABELS } from "@/lib/access-control";
 import { apiClient } from "@/providers/api-client";
 import { AUTH_TOKEN_KEY, AUTH_USER_KEY } from "@/providers/constants";
 import { Button } from "@/components/ui/button";
@@ -98,7 +98,7 @@ export function AcceptInvitationPage() {
 
       localStorage.setItem(AUTH_TOKEN_KEY, result.token);
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(result.user));
-      navigate(getDefaultRouteForRole(result.user.role), { replace: true });
+      navigate(getDefaultRouteForUser(result.user), { replace: true });
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : "تعذر إكمال التسجيل عبر الدعوة"

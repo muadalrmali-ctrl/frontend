@@ -1,13 +1,16 @@
-import { ReactNode } from "react";
-import { useOne } from "@refinedev/core";
-import { ArrowRight, CheckCircle2, Clock3, Package, Phone, ShieldCheck, UserRound, Wrench } from "lucide-react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
+import { useNotification, useOne } from "@refinedev/core";
+import { ArrowRight, CheckCircle2, Clock3, Package, Phone, Save, ShieldCheck, UserRound, Wrench } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ROLE_LABELS } from "@/lib/access-control";
+import { apiClient } from "@/providers/api-client";
+import { getStoredUser } from "@/providers/auth-provider";
 
 type TeamMemberDetails = {
   user: {
@@ -97,6 +100,36 @@ type TeamMemberDetails = {
   }>;
 };
 
+type PermissionCatalogItem = {
+  key: string;
+  label: string;
+  group: string;
+  parentKey?: string | null;
+  description?: string | null;
+  sortOrder?: number;
+};
+
+type TeamMemberPermissions = {
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    isAdmin: boolean;
+  };
+  permissions: string[];
+};
+
+const PERMISSION_GROUP_LABELS: Record<string, string> = {
+  dashboard: "لوحة التحكم",
+  cases: "الحالات",
+  maintenance_operations: "عمليات الصيانة",
+  inventory: "المخزون",
+  sales: "المبيعات",
+  reports: "التقارير",
+  accounting: "المحاسبة",
+};
+
 const formatDate = (value?: string | null) => {
   if (!value) return "غير متوفر";
   return new Intl.DateTimeFormat("ar-LY", {
@@ -135,6 +168,9 @@ const getStatusLabel = (status: string) => {
 export function TeamMemberDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { open } = useNotification();
+  const currentUser = getStoredUser();
+  const canManagePermissions = currentUser?.role === "admin";
   const memberId = Number(id);
   const { result, query } = useOne<TeamMemberDetails>({
     resource: "accounting-team",
@@ -143,6 +179,46 @@ export function TeamMemberDetailsPage() {
       enabled: Number.isFinite(memberId),
     },
   });
+  const [catalog, setCatalog] = useState<PermissionCatalogItem[]>([]);
+  const [assignedPermissions, setAssignedPermissions] = useState<string[]>([]);
+  const [isPermissionsLoading, setIsPermissionsLoading] = useState(false);
+  const [isSavingPermissions, setIsSavingPermissions] = useState(false);
+  const [permissionsError, setPermissionsError] = useState<string | null>(null);
+  const [permissionPayload, setPermissionPayload] = useState<TeamMemberPermissions | null>(null);
+
+  useEffect(() => {
+    if (!canManagePermissions || !Number.isFinite(memberId)) {
+      return;
+    }
+
+    let isMounted = true;
+    setIsPermissionsLoading(true);
+    setPermissionsError(null);
+
+    Promise.all([
+      apiClient<PermissionCatalogItem[]>("/api/permissions/catalog"),
+      apiClient<TeamMemberPermissions>(`/api/auth/team/${memberId}/permissions`),
+    ])
+      .then(([catalogResponse, permissionsResponse]) => {
+        if (!isMounted) return;
+        setCatalog(catalogResponse);
+        setPermissionPayload(permissionsResponse);
+        setAssignedPermissions(normalizePermissionSelection(permissionsResponse.permissions, catalogResponse));
+      })
+      .catch((error) => {
+        if (!isMounted) return;
+        setPermissionsError(error instanceof Error ? error.message : "تعذر تحميل الصلاحيات");
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsPermissionsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [canManagePermissions, memberId]);
 
   if (!Number.isFinite(memberId)) {
     return <p className="text-sm text-destructive">رقم العضو غير صالح.</p>;
@@ -153,6 +229,70 @@ export function TeamMemberDetailsPage() {
   const isTechnician = role === "technician" || role === "technician_manager";
   const isStoreManager = role === "store_manager";
   const isSimpleRole = role === "receptionist" || role === "admin" || role === "maintenance_manager";
+  const permissionTree = useMemo(() => buildPermissionTree(catalog), [catalog]);
+  const activePermissionsCount = assignedPermissions.length;
+
+  const togglePermission = (permissionKey: string, checked: boolean) => {
+    setAssignedPermissions((current) =>
+      computeNextPermissionSelection({
+        currentKeys: current,
+        permissionKey,
+        checked,
+        catalog,
+      })
+    );
+  };
+
+  const selectAllPermissions = () => {
+    setAssignedPermissions(catalog.map((item) => item.key));
+  };
+
+  const clearAllPermissions = () => {
+    setAssignedPermissions([]);
+  };
+
+  const savePermissions = async () => {
+    if (!permissionPayload || permissionPayload.user.isAdmin) {
+      return;
+    }
+
+    setIsSavingPermissions(true);
+    setPermissionsError(null);
+
+    try {
+      const normalizedSelection = normalizePermissionSelection(assignedPermissions, catalog);
+      await apiClient(`/api/auth/team/${memberId}/permissions`, {
+        method: "PUT",
+        body: {
+          permissions: normalizedSelection,
+        },
+      });
+      setAssignedPermissions(normalizedSelection);
+      setPermissionPayload((current) =>
+        current
+          ? {
+              ...current,
+              permissions: normalizedSelection,
+            }
+          : current
+      );
+      open?.({
+        type: "success",
+        message: "تم حفظ الصلاحيات",
+        description: "تم تحديث صلاحيات العضو بنجاح.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "تعذر حفظ الصلاحيات";
+      setPermissionsError(message);
+      open?.({
+        type: "error",
+        message: "تعذر حفظ الصلاحيات",
+        description: message,
+      });
+    } finally {
+      setIsSavingPermissions(false);
+    }
+  };
 
   return (
     <section className="space-y-6" dir="rtl">
@@ -197,6 +337,72 @@ export function TeamMemberDetailsPage() {
               {isTechnician ? <Info label="التخصص" value={details.user.specialty || "غير متوفر"} icon={<Wrench className="size-4" />} /> : null}
             </CardContent>
           </Card>
+
+          {canManagePermissions ? (
+            <Card className="rounded-2xl border-border/70 bg-card/80">
+              <CardHeader>
+                <CardTitle>إدارة صلاحيات العضو</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="permissions" className="gap-4">
+                  <TabsList className="w-full justify-start">
+                    <TabsTrigger value="permissions">الصلاحيات</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="permissions" className="space-y-4">
+                    {isPermissionsLoading ? <p className="text-sm text-muted-foreground">جارٍ تحميل الصلاحيات...</p> : null}
+                    {permissionsError ? <p className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">{permissionsError}</p> : null}
+                    {permissionPayload?.user.isAdmin ? (
+                      <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-4 text-sm text-muted-foreground">
+                        هذا العضو يحمل دور الأدمن، وبالتالي يملك وصولًا كاملاً ثابتًا ولا يتم تقييده من شاشة الصلاحيات.
+                      </div>
+                    ) : null}
+                    {!isPermissionsLoading && permissionTree.length > 0 && !permissionPayload?.user.isAdmin ? (
+                      <>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="text-sm text-muted-foreground">
+                            عدد الصلاحيات المفعلة: <span className="font-semibold text-foreground">{activePermissionsCount}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={selectAllPermissions}>
+                              تحديد الكل
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={clearAllPermissions}>
+                              إلغاء الكل
+                            </Button>
+                            <Button type="button" size="sm" onClick={savePermissions} disabled={isSavingPermissions}>
+                              <Save className="size-4" />
+                              {isSavingPermissions ? "جارٍ الحفظ..." : "حفظ"}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 xl:grid-cols-2">
+                          {permissionTree.map((group) => (
+                            <Card key={group.groupKey} className="rounded-2xl border-border/60 bg-muted/10">
+                              <CardHeader className="pb-3">
+                                <CardTitle className="text-base">{group.label}</CardTitle>
+                              </CardHeader>
+                              <CardContent className="space-y-3">
+                                {group.items.map((item) => (
+                                  <PermissionNode
+                                    key={item.key}
+                                    item={item}
+                                    catalog={catalog}
+                                    selectedKeys={assignedPermissions}
+                                    onToggle={togglePermission}
+                                  />
+                                ))}
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          ) : null}
 
           {isTechnician && details.technicianSummary ? (
             <>
@@ -374,6 +580,149 @@ export function TeamMemberDetailsPage() {
       ) : null}
     </section>
   );
+}
+
+function PermissionNode({
+  item,
+  catalog,
+  selectedKeys,
+  onToggle,
+  level = 0,
+}: {
+  item: PermissionCatalogItem;
+  catalog: PermissionCatalogItem[];
+  selectedKeys: string[];
+  onToggle: (permissionKey: string, checked: boolean) => void;
+  level?: number;
+}) {
+  const directChildren = catalog
+    .filter((entry) => entry.parentKey === item.key)
+    .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
+  const state = getPermissionCheckboxState(item.key, selectedKeys, catalog);
+
+  return (
+    <div className="space-y-3">
+      <label
+        className="flex items-start gap-3 rounded-xl border border-border/50 bg-background/70 px-4 py-3"
+        style={{ marginInlineStart: `${level * 18}px` }}
+      >
+        <Checkbox
+          checked={state}
+          onCheckedChange={(checked) => onToggle(item.key, checked === true)}
+          className="mt-1"
+        />
+        <div className="grid gap-1">
+          <span className="font-medium">{item.label}</span>
+          {item.description ? <span className="text-xs text-muted-foreground">{item.description}</span> : null}
+          <span className="text-[11px] text-muted-foreground">{item.key}</span>
+        </div>
+      </label>
+      {directChildren.map((child) => (
+        <PermissionNode
+          key={child.key}
+          item={child}
+          catalog={catalog}
+          selectedKeys={selectedKeys}
+          onToggle={onToggle}
+          level={level + 1}
+        />
+      ))}
+    </div>
+  );
+}
+
+function buildPermissionTree(catalog: PermissionCatalogItem[]) {
+  const grouped = new Map<string, PermissionCatalogItem[]>();
+  const catalogKeys = new Set(catalog.map((item) => item.key));
+
+  for (const item of catalog) {
+    const hasValidParent = item.parentKey && catalogKeys.has(item.parentKey);
+    if (hasValidParent) {
+      continue;
+    }
+
+    const groupItems = grouped.get(item.group) ?? [];
+    groupItems.push(item);
+    grouped.set(item.group, groupItems);
+  }
+
+  return Array.from(grouped.entries()).map(([groupKey, items]) => ({
+    groupKey,
+    label: PERMISSION_GROUP_LABELS[groupKey] ?? groupKey,
+    items: [...items].sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0)),
+  }));
+}
+
+function getDescendantKeys(permissionKey: string, catalog: PermissionCatalogItem[]): string[] {
+  const directChildren = catalog.filter((item) => item.parentKey === permissionKey);
+  return directChildren.flatMap((child) => [child.key, ...getDescendantKeys(child.key, catalog)]);
+}
+
+function getAncestorKeys(permissionKey: string, catalog: PermissionCatalogItem[]) {
+  const ancestors: string[] = [];
+  const catalogMap = new Map(catalog.map((item) => [item.key, item]));
+  let current = catalogMap.get(permissionKey);
+
+  while (current?.parentKey) {
+    ancestors.push(current.parentKey);
+    current = catalogMap.get(current.parentKey);
+  }
+
+  return ancestors;
+}
+
+function normalizePermissionSelection(permissionKeys: string[], catalog: PermissionCatalogItem[]) {
+  const normalized = new Set(permissionKeys);
+
+  for (const key of permissionKeys) {
+    getAncestorKeys(key, catalog).forEach((ancestorKey) => normalized.add(ancestorKey));
+  }
+
+  return [...normalized];
+}
+
+function computeNextPermissionSelection({
+  currentKeys,
+  permissionKey,
+  checked,
+  catalog,
+}: {
+  currentKeys: string[];
+  permissionKey: string;
+  checked: boolean;
+  catalog: PermissionCatalogItem[];
+}) {
+  const nextKeys = new Set(currentKeys);
+  const relatedKeys = [permissionKey, ...getDescendantKeys(permissionKey, catalog)];
+
+  if (checked) {
+    relatedKeys.forEach((key) => nextKeys.add(key));
+    getAncestorKeys(permissionKey, catalog).forEach((key) => nextKeys.add(key));
+  } else {
+    relatedKeys.forEach((key) => nextKeys.delete(key));
+  }
+
+  return normalizePermissionSelection([...nextKeys], catalog);
+}
+
+function getPermissionCheckboxState(permissionKey: string, selectedKeys: string[], catalog: PermissionCatalogItem[]) {
+  const selectedSet = new Set(selectedKeys);
+  const descendantKeys = getDescendantKeys(permissionKey, catalog);
+
+  if (!descendantKeys.length) {
+    return selectedSet.has(permissionKey);
+  }
+
+  const selectedChildrenCount = descendantKeys.filter((key) => selectedSet.has(key)).length;
+  if (selectedChildrenCount === 0) {
+    return selectedSet.has(permissionKey);
+  }
+
+  if (selectedChildrenCount === descendantKeys.length) {
+    return true;
+  }
+
+  return "indeterminate" as const;
 }
 
 function Avatar({ name, imageUrl }: { name?: string; imageUrl?: string | null }) {

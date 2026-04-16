@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
-import { useGetIdentity, useList, useNotification } from "@refinedev/core";
+import { useList, useNotification } from "@refinedev/core";
 import { Link, useNavigate, useParams } from "react-router";
 import {
   ArrowRight,
@@ -58,7 +58,9 @@ import {
   uploadCaseImageFile,
   uploadCaseVideoFile,
 } from "@/lib/case-media-upload";
+import { hasPermission } from "@/lib/access-control";
 import { apiClient } from "@/providers/api-client";
+import { getStoredUser } from "@/providers/auth-provider";
 
 type CaseDetailsResponse = {
   caseData: CaseData;
@@ -124,7 +126,6 @@ type CaseData = {
 type Customer = { id: number; name: string; phone: string; address?: string | null };
 type Device = { id: number; applianceType: string; brand: string; modelName: string; modelCode?: string | null; notes?: string | null };
 type UserSummary = { id: number; name: string; email: string };
-type CurrentUser = UserSummary & { role: string };
 type CaseHistory = { id: number; toStatus: string; notes?: string | null; createdAt?: string | null; actorName?: string | null; actorRole?: string | null };
 type InventoryItem = { id: number; name: string; code: string; quantity?: number; sellingPrice?: string | null; unitCost?: string | null; imageUrl?: string | null };
 type CasePart = {
@@ -541,6 +542,8 @@ function CaseActivityTimeline({ history }: { history: CaseHistory[] }) {
 }
 
 function WaitingPartSection({ details, onSaved }: { details: CaseDetailsResponse; onSaved: () => Promise<void> }) {
+  const currentUser = getStoredUser();
+  const canEditWaitingPart = hasPermission(currentUser, "cases.diagnosis.edit");
   const { result } = useList<InventoryItem>({ resource: "inventory" });
   const inventoryItems = result.data ?? [];
   const [selectedItemId, setSelectedItemId] = useState(details.caseData.waitingPartInventoryItemId ? String(details.caseData.waitingPartInventoryItemId) : "manual");
@@ -610,7 +613,7 @@ function WaitingPartSection({ details, onSaved }: { details: CaseDetailsResponse
       <CardContent>
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <Field label="اختيار من المخزون">
-            <Select value={selectedItemId} onValueChange={setSelectedItemId}>
+            <Select value={selectedItemId} onValueChange={setSelectedItemId} disabled={!canEditWaitingPart}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="manual">إدخال يدوي</SelectItem>
@@ -627,19 +630,19 @@ function WaitingPartSection({ details, onSaved }: { details: CaseDetailsResponse
               </div>
             </div>
           ) : (
-            <Field label="اسم / وصف القطعة"><Input value={manualName} onChange={(event) => setManualName(event.target.value)} /></Field>
+            <Field label="اسم / وصف القطعة"><Input value={manualName} onChange={(event) => setManualName(event.target.value)} disabled={!canEditWaitingPart} /></Field>
           )}
           <div className="grid gap-4 rounded-lg border bg-muted/10 p-4 md:grid-cols-[220px_1fr]">
             <ImageBox imageUrl={previewImageUrl} label={selectedItem?.name || manualName || "صورة القطعة"} />
             <div className="grid content-center gap-3">
-              <Field label="رفع صورة من الجهاز"><Input type="file" accept="image/*" onChange={handleSupabaseImageUpload} /></Field>
-              <Field label="أو رابط صورة اختياري"><Input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder="https://..." /></Field>
+              <Field label="رفع صورة من الجهاز"><Input type="file" accept="image/*" onChange={handleSupabaseImageUpload} disabled={!canEditWaitingPart} /></Field>
+              <Field label="أو رابط صورة اختياري"><Input value={imageUrl} onChange={(event) => setImageUrl(event.target.value)} placeholder="https://..." disabled={!canEditWaitingPart} /></Field>
               <p className="text-sm text-muted-foreground">التخزين الحالي يحفظ صورة صغيرة أو رابط صورة. يمكن ربطه لاحقا بتخزين خارجي بدون تغيير شكل البيانات.</p>
             </div>
           </div>
-          <Field label="ملاحظات"><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></Field>
+          <Field label="ملاحظات"><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} disabled={!canEditWaitingPart} /></Field>
           {error && <ErrorMessage message={error} />}
-          <Button type="submit" className="w-fit">حفظ القطعة المنتظرة</Button>
+          {canEditWaitingPart ? <Button type="submit" className="w-fit">حفظ القطعة المنتظرة</Button> : null}
         </form>
       </CardContent>
     </Card>
@@ -647,6 +650,9 @@ function WaitingPartSection({ details, onSaved }: { details: CaseDetailsResponse
 }
 
 function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
+  const currentUser = getStoredUser();
+  const canEditDiagnosis = hasPermission(currentUser, "cases.diagnosis.edit");
+  const canPreviewInvoice = hasPermission(currentUser, "cases.diagnosis.invoice.preview");
   const { open } = useNotification();
   const { result } = useList<InventoryItem>({ resource: "inventory" });
   const inventoryItems = result.data ?? [];
@@ -833,30 +839,30 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
       <CardContent className="grid gap-6">
         {error && <ErrorMessage message={error} />}
         <div className="grid gap-4 md:grid-cols-3">
-          <Field label="عدد الأيام المتوقع بعد الموافقة"><Input type="number" min="0" value={deliveryDays} onChange={(event) => handleDaysChange(event.target.value)} /></Field>
-          <Field label="أو اختر تاريخا مباشرا"><Input type="date" value={deliveryDate} onChange={(event) => handleDateChange(event.target.value)} /></Field>
-          <div className="flex items-end"><Button type="button" onClick={saveDiagnosis}>حفظ التشخيص</Button></div>
+          <Field label="عدد الأيام المتوقع بعد الموافقة"><Input type="number" min="0" value={deliveryDays} onChange={(event) => handleDaysChange(event.target.value)} disabled={!canEditDiagnosis} /></Field>
+          <Field label="أو اختر تاريخا مباشرا"><Input type="date" value={deliveryDate} onChange={(event) => handleDateChange(event.target.value)} disabled={!canEditDiagnosis} /></Field>
+          <div className="flex items-end">{canEditDiagnosis ? <Button type="button" onClick={saveDiagnosis}>حفظ التشخيص</Button> : null}</div>
         </div>
-        <Field label="ملاحظة / سبب العطل"><Textarea value={diagnosisText} onChange={(event) => setDiagnosisText(event.target.value)} className="min-h-32" /></Field>
+        <Field label="ملاحظة / سبب العطل"><Textarea value={diagnosisText} onChange={(event) => setDiagnosisText(event.target.value)} className="min-h-32" disabled={!canEditDiagnosis} /></Field>
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader><CardTitle className="text-lg">إضافة قطعة</CardTitle></CardHeader>
             <CardContent className="grid gap-3">
-              <Select value={selectedPartId} onValueChange={setSelectedPartId}>
+              <Select value={selectedPartId} onValueChange={setSelectedPartId} disabled={!canEditDiagnosis}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="اختر قطعة من المخزون" /></SelectTrigger>
                 <SelectContent>{inventoryItems.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name} - {item.code}</SelectItem>)}</SelectContent>
               </Select>
               {selectedPart && <div className="flex items-center gap-3 rounded-lg border p-3"><ImageBox imageUrl={selectedPart.imageUrl} label={selectedPart.name} small /><div><p className="font-medium">{selectedPart.name}</p><p className="text-sm text-muted-foreground">{selectedPart.code}</p></div></div>}
-              <Input type="number" min="1" value={partQuantity} onChange={(event) => setPartQuantity(event.target.value)} />
-              <Button type="button" onClick={handleAddPart}><Plus /> إضافة قطعة</Button>
+              <Input type="number" min="1" value={partQuantity} onChange={(event) => setPartQuantity(event.target.value)} disabled={!canEditDiagnosis} />
+              {canEditDiagnosis ? <Button type="button" onClick={handleAddPart}><Plus /> إضافة قطعة</Button> : null}
             </CardContent>
           </Card>
           <Card>
             <CardHeader><CardTitle className="text-lg">إضافة خدمة</CardTitle></CardHeader>
             <CardContent className="grid gap-3">
-              <Input value={serviceName} onChange={(event) => setServiceName(event.target.value)} placeholder="صيانة / فحص / عمل يد / قبض" />
-              <Input type="number" min="0" value={servicePrice} onChange={(event) => setServicePrice(event.target.value)} placeholder="السعر" />
-              <Button type="button" onClick={handleAddService}><Plus /> إضافة خدمة</Button>
+              <Input value={serviceName} onChange={(event) => setServiceName(event.target.value)} placeholder="صيانة / فحص / عمل يد / قبض" disabled={!canEditDiagnosis} />
+              <Input type="number" min="0" value={servicePrice} onChange={(event) => setServicePrice(event.target.value)} placeholder="السعر" disabled={!canEditDiagnosis} />
+              {canEditDiagnosis ? <Button type="button" onClick={handleAddService}><Plus /> إضافة خدمة</Button> : null}
             </CardContent>
           </Card>
         </div>
@@ -867,17 +873,21 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
             راجع التشخيص والتكلفة المتوقعة والموعد المتوقع ثم أرسل الرسالة عبر WhatsApp من خلال تكامل الباكند مع n8n.
           </p>
           <div className="flex flex-wrap gap-3">
-            <Button type="button" className="w-fit" onClick={() => setIsDiagnosisDialogOpen(true)}>
-              <Send />
-              Send Diagnosis
-            </Button>
-            <CaseInvoicePreviewButton
-              details={details}
-              label="معاينة الفاتورة"
-            />
+            {canEditDiagnosis ? (
+              <Button type="button" className="w-fit" onClick={() => setIsDiagnosisDialogOpen(true)}>
+                <Send />
+                Send Diagnosis
+              </Button>
+            ) : null}
+            {canPreviewInvoice ? (
+              <CaseInvoicePreviewButton
+                details={details}
+                label="معاينة الفاتورة"
+              />
+            ) : null}
           </div>
         </div>
-        <Dialog open={isDiagnosisDialogOpen} onOpenChange={setIsDiagnosisDialogOpen}>
+        <Dialog open={canEditDiagnosis && isDiagnosisDialogOpen} onOpenChange={setIsDiagnosisDialogOpen}>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl" dir="rtl">
             <DialogHeader>
               <DialogTitle>إرسال التشخيص</DialogTitle>
@@ -1062,8 +1072,12 @@ function WaitingApprovalSection({ details, parts, services, onSaved }: { details
 }
 
 function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
+  const currentUser = getStoredUser();
+  const canEditDiagnosis = hasPermission(currentUser, "cases.diagnosis.edit");
+  const canApprove = hasPermission(currentUser, "cases.approval.approve");
+  const canManagePartHandoff = hasPermission(currentUser, "cases.approval.part_delivery_receive");
+  const canPrepareExecution = hasPermission(currentUser, "cases.approval.prepare_execution");
   const { open } = useNotification();
-  const { data: currentUser } = useGetIdentity<CurrentUser>();
   const [isEditingInvoice, setIsEditingInvoice] = useState(false);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
@@ -1077,11 +1091,8 @@ function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }:
   const hasCaseParts = parts.length > 0;
   const allPartsReceived = parts.every(isPartReadyForExecution);
   const canStartExecution = approvalConfirmed && (!hasCaseParts || allPartsReceived);
-  const canDeliver = currentUser?.role === "store_manager" || currentUser?.role === "admin";
-  const canReceive =
-    currentUser?.role === "technician" ||
-    currentUser?.role === "technician_manager" ||
-    currentUser?.role === "admin";
+  const canDeliver = canManagePartHandoff;
+  const canReceive = canManagePartHandoff;
 
   const resendMessage = async () => {
     setError(null);
@@ -1212,13 +1223,19 @@ function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }:
             value={approvalConfirmed ? `تمت الموافقة في ${formatDate(details.caseData.customerApprovedAt)}` : "بانتظار موافقة العميل"}
           />
           <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="outline" onClick={() => setIsEditingInvoice((value) => !value)}>تعديل الفاتورة</Button>
-            <Button type="button" variant="outline" onClick={resendMessage}><RotateCcw /> إعادة الإرسال</Button>
-            <Button type="button" variant="outline" onClick={() => setIsRejectDialogOpen(true)}>رفض العميل</Button>
-            <Button type="button" onClick={confirmApproval} disabled={approvalConfirmed || isApproving}>
-              <CheckCircle2 />
-              {approvalConfirmed ? "تمت الموافقة" : isApproving ? "جارٍ الحفظ..." : "تمت الموافقة"}
-            </Button>
+            {canEditDiagnosis ? (
+              <>
+                <Button type="button" variant="outline" onClick={() => setIsEditingInvoice((value) => !value)}>تعديل الفاتورة</Button>
+                <Button type="button" variant="outline" onClick={resendMessage}><RotateCcw /> إعادة الإرسال</Button>
+                <Button type="button" variant="outline" onClick={() => setIsRejectDialogOpen(true)}>رفض العميل</Button>
+              </>
+            ) : null}
+            {canApprove ? (
+              <Button type="button" onClick={confirmApproval} disabled={approvalConfirmed || isApproving}>
+                <CheckCircle2 />
+                {approvalConfirmed ? "تمت الموافقة" : isApproving ? "جارٍ الحفظ..." : "تمت الموافقة"}
+              </Button>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -1239,7 +1256,7 @@ function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }:
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {isEditingInvoice && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={onSaved} />}
+      {canEditDiagnosis && isEditingInvoice ? <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={onSaved} /> : null}
       {(approvalConfirmed || isExternalCase) && (
         <Card className="rounded-lg border-primary/20">
           <CardHeader>
@@ -1318,7 +1335,7 @@ function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }:
           </CardContent>
         </Card>
       )}
-      {canStartExecution && <ExecutionPreparationSection details={details} onSaved={onSaved} />}
+      {canStartExecution && canPrepareExecution ? <ExecutionPreparationSection details={details} onSaved={onSaved} /> : null}
     </div>
   );
 }
@@ -1375,6 +1392,9 @@ function ExecutionPreparationSection({ details, onSaved }: { details: CaseDetail
 }
 
 function ExecutionSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
+  const currentUser = getStoredUser();
+  const canPreviewExecution = hasPermission(currentUser, "cases.in_progress.execution.preview");
+  const canMarkRepaired = hasPermission(currentUser, "cases.in_progress.mark_repaired");
   const { open } = useNotification();
   const [now, setNow] = useState(Date.now());
   const [isEditingInvoice, setIsEditingInvoice] = useState(false);
@@ -1449,19 +1469,26 @@ function ExecutionSection({ details, parts, services, onSaved }: { details: Case
           </div>
           <InvoicePreview parts={parts} services={services} />
           <div className="flex flex-wrap gap-3">
-            <Button type="button" variant="outline" onClick={openEditPanel}>تعديل</Button>
-            <Button type="button" variant="outline" onClick={openEditPanel}><PauseCircle /> إعادة إرسال</Button>
-            <Button type="button" variant="outline" onClick={resumeExecution} disabled={!isPaused}><PlayCircle /> تمت الموافقة</Button>
-            <Button type="button" onClick={completeRepair}><CheckCircle2 /> تم الإصلاح</Button>
+            {canPreviewExecution ? (
+              <>
+                <Button type="button" variant="outline" onClick={openEditPanel}>تعديل</Button>
+                <Button type="button" variant="outline" onClick={openEditPanel}><PauseCircle /> إعادة إرسال</Button>
+                <Button type="button" variant="outline" onClick={resumeExecution} disabled={!isPaused}><PlayCircle /> تمت الموافقة</Button>
+              </>
+            ) : null}
+            {canMarkRepaired ? <Button type="button" onClick={completeRepair}><CheckCircle2 /> تم الإصلاح</Button> : null}
           </div>
         </CardContent>
       </Card>
-      {isEditingInvoice && <ExecutionEditSection details={details} parts={parts} services={services} onSaved={onSaved} />}
+      {canPreviewExecution && isEditingInvoice ? <ExecutionEditSection details={details} parts={parts} services={services} onSaved={onSaved} /> : null}
     </div>
   );
 }
 
 function ExecutionEditSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
+  const currentUser = getStoredUser();
+  const canEditInvoice = hasPermission(currentUser, "cases.diagnosis.edit");
+  const canSendExecutionUpdate = hasPermission(currentUser, "cases.in_progress.execution.preview");
   const { open } = useNotification();
   const { result } = useList<InventoryItem>({ resource: "inventory" });
   const inventoryItems = result.data ?? [];
@@ -1575,40 +1602,44 @@ function ExecutionEditSection({ details, parts, services, onSaved }: { details: 
         {error && <ErrorMessage message={error} />}
         <p className="text-sm text-muted-foreground">تم إيقاف مؤقت التنفيذ مؤقتًا أثناء التعديل. مدة التنفيذ الأصلية مقفلة ولا يمكن تغييرها.</p>
         <Field label="موعد التسليم المتوقع">
-          <Input type="date" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} />
+          <Input type="date" value={deliveryDate} onChange={(event) => setDeliveryDate(event.target.value)} disabled={!canSendExecutionUpdate} />
         </Field>
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader><CardTitle className="text-lg">إضافة قطعة</CardTitle></CardHeader>
             <CardContent className="grid gap-3">
-              <Select value={selectedPartId} onValueChange={setSelectedPartId}>
+              <Select value={selectedPartId} onValueChange={setSelectedPartId} disabled={!canEditInvoice}>
                 <SelectTrigger><SelectValue placeholder="اختر قطعة" /></SelectTrigger>
                 <SelectContent>{inventoryItems.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name} - {item.code}</SelectItem>)}</SelectContent>
               </Select>
-              <Input type="number" min="1" value={partQuantity} onChange={(event) => setPartQuantity(event.target.value)} />
-              <Button type="button" onClick={addPart}><Plus /> إضافة قطعة</Button>
+              <Input type="number" min="1" value={partQuantity} onChange={(event) => setPartQuantity(event.target.value)} disabled={!canEditInvoice} />
+              {canEditInvoice ? <Button type="button" onClick={addPart}><Plus /> إضافة قطعة</Button> : null}
             </CardContent>
           </Card>
           <Card>
             <CardHeader><CardTitle className="text-lg">إضافة خدمة</CardTitle></CardHeader>
             <CardContent className="grid gap-3">
-              <Input value={serviceName} onChange={(event) => setServiceName(event.target.value)} placeholder="اسم الخدمة" />
-              <Input type="number" min="0" value={servicePrice} onChange={(event) => setServicePrice(event.target.value)} placeholder="السعر" />
-              <Button type="button" onClick={addService}><Plus /> إضافة خدمة</Button>
+              <Input value={serviceName} onChange={(event) => setServiceName(event.target.value)} placeholder="اسم الخدمة" disabled={!canEditInvoice} />
+              <Input type="number" min="0" value={servicePrice} onChange={(event) => setServicePrice(event.target.value)} placeholder="السعر" disabled={!canEditInvoice} />
+              {canEditInvoice ? <Button type="button" onClick={addService}><Plus /> إضافة خدمة</Button> : null}
             </CardContent>
           </Card>
         </div>
-        <EditableInvoicePreview parts={parts} services={services} onRemovePart={removePart} onRemoveService={removeService} />
+        {canEditInvoice ? (
+          <EditableInvoicePreview parts={parts} services={services} onRemovePart={removePart} onRemoveService={removeService} />
+        ) : (
+          <InvoicePreview parts={parts} services={services} />
+        )}
         <div className="grid gap-3 rounded-lg border p-4">
           <h3 className="font-semibold">التواصل مع العميل</h3>
           <div className="flex flex-wrap gap-3">
-            <Select value={channel} onValueChange={setChannel}>
+            <Select value={channel} onValueChange={setChannel} disabled={!canSendExecutionUpdate}>
               <SelectTrigger className="w-full md:w-56"><SelectValue /></SelectTrigger>
               <SelectContent>{channelLabels.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent>
             </Select>
-            <Button type="button" onClick={saveDeliveryAndSend}><Send /> إرسال التحديث</Button>
+            {canSendExecutionUpdate ? <Button type="button" onClick={saveDeliveryAndSend}><Send /> إرسال التحديث</Button> : null}
           </div>
-          <Textarea value={messageText} onChange={(event) => setMessageText(event.target.value)} className="min-h-36" />
+          <Textarea value={messageText} onChange={(event) => setMessageText(event.target.value)} className="min-h-36" disabled={!canSendExecutionUpdate} />
         </div>
       </CardContent>
     </Card>
@@ -1616,6 +1647,8 @@ function ExecutionEditSection({ details, parts, services, onSaved }: { details: 
 }
 
 function NotRepairableSection({ details, onSaved }: { details: CaseDetailsResponse; onSaved: () => Promise<void> }) {
+  const currentUser = getStoredUser();
+  const canFinalizeOperation = hasPermission(currentUser, "cases.repaired.post_repair_quality.view");
   const navigate = useNavigate();
   const { open } = useNotification();
   const [reason, setReason] = useState(details.caseData.notRepairableReason || details.caseData.finalResult || "");
@@ -1659,13 +1692,16 @@ function NotRepairableSection({ details, onSaved }: { details: CaseDetailsRespon
           onChange={(event) => setReason(event.target.value)}
           className="min-h-36"
           placeholder="اكتب سبب عدم التمكن من الإصلاح"
+          disabled={!canFinalizeOperation}
         />
       </Field>
       {error && <ErrorMessage message={error} />}
       <div className="flex flex-wrap gap-3">
-        <Button type="button" onClick={finalizeOperation}>
-          إنهاء العملية
-        </Button>
+        {canFinalizeOperation ? (
+          <Button type="button" onClick={finalizeOperation}>
+            إنهاء العملية
+          </Button>
+        ) : null}
       </div>
       </CardContent>
     </Card>
@@ -1673,6 +1709,11 @@ function NotRepairableSection({ details, onSaved }: { details: CaseDetailsRespon
 }
 
 function RepairedSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
+  const currentUser = getStoredUser();
+  const canManageQuality = hasPermission(currentUser, "cases.repaired.post_repair_quality.view");
+  const canPreviewInvoice = hasPermission(currentUser, "cases.repaired.invoice.preview");
+  const canSendReadyNotification = hasPermission(currentUser, "cases.repaired.ready_notification.send");
+  const canMarkCustomerReceived = hasPermission(currentUser, "cases.repaired.summary.view");
   const navigate = useNavigate();
   const { open } = useNotification();
   const actualSeconds = getExecutionElapsedSeconds(details.caseData);
@@ -1949,15 +1990,15 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
     <Card className="rounded-lg">
       <CardHeader><CardTitle>فحص ما بعد الإصلاح والجودة</CardTitle></CardHeader>
       <CardContent className="grid gap-4">
-        <Field label="ما الذي تم إصلاحه؟"><Textarea value={completedWork} onChange={(event) => setCompletedWork(event.target.value)} className="min-h-28" /></Field>
-        <label className="flex items-center gap-2 rounded-lg border p-3"><input type="checkbox" checked={tested} onChange={(event) => setTested(event.target.checked)} /> تم اختبار الجهاز بعد الإصلاح</label>
-        <Field label="عدد مرات الاختبار"><Input type="number" min="1" value={testCount} onChange={(event) => setTestCount(event.target.value)} /></Field>
-        <label className="flex items-center gap-2 rounded-lg border p-3"><input type="checkbox" checked={cleaned} onChange={(event) => setCleaned(event.target.checked)} /> تم تنظيف الجهاز</label>
-        <Field label="نصائح فنية للعميل"><Textarea value={recommendations} onChange={(event) => setRecommendations(event.target.value)} /></Field>
-        <ImageUploadGrid label="صور الجهاز بعد الإصلاح" images={repairImages} onUpload={(event) => uploadImagesToSupabase(event, setRepairImages, repairImages, "post_repair", "postRepairImages")} uploading={isUploadingRepairMedia} />
-        <VideoUploadGrid label="فيديو الجهاز بعد الإصلاح" videos={repairVideos} onUpload={uploadVideosToSupabase} uploading={isUploadingRepairMedia} />
-        <ImageUploadGrid label="القطعة المعطوبة" images={damagedPartImages} onUpload={(event) => uploadImagesToSupabase(event, setDamagedPartImages, damagedPartImages, "damaged_part", "postRepairDamagedPartImages")} uploading={isUploadingRepairMedia} />
-        <Field label="ملاحظة"><Textarea value={note} onChange={(event) => setNote(event.target.value)} /></Field>
+        <Field label="ما الذي تم إصلاحه؟"><Textarea value={completedWork} onChange={(event) => setCompletedWork(event.target.value)} className="min-h-28" disabled={!canManageQuality} /></Field>
+        <label className="flex items-center gap-2 rounded-lg border p-3"><input type="checkbox" checked={tested} onChange={(event) => setTested(event.target.checked)} disabled={!canManageQuality} /> تم اختبار الجهاز بعد الإصلاح</label>
+        <Field label="عدد مرات الاختبار"><Input type="number" min="1" value={testCount} onChange={(event) => setTestCount(event.target.value)} disabled={!canManageQuality} /></Field>
+        <label className="flex items-center gap-2 rounded-lg border p-3"><input type="checkbox" checked={cleaned} onChange={(event) => setCleaned(event.target.checked)} disabled={!canManageQuality} /> تم تنظيف الجهاز</label>
+        <Field label="نصائح فنية للعميل"><Textarea value={recommendations} onChange={(event) => setRecommendations(event.target.value)} disabled={!canManageQuality} /></Field>
+        <ImageUploadGrid label="صور الجهاز بعد الإصلاح" images={repairImages} onUpload={(event) => uploadImagesToSupabase(event, setRepairImages, repairImages, "post_repair", "postRepairImages")} uploading={isUploadingRepairMedia} disabled={!canManageQuality} />
+        <VideoUploadGrid label="فيديو الجهاز بعد الإصلاح" videos={repairVideos} onUpload={uploadVideosToSupabase} uploading={isUploadingRepairMedia} disabled={!canManageQuality} />
+        <ImageUploadGrid label="القطعة المعطوبة" images={damagedPartImages} onUpload={(event) => uploadImagesToSupabase(event, setDamagedPartImages, damagedPartImages, "damaged_part", "postRepairDamagedPartImages")} uploading={isUploadingRepairMedia} disabled={!canManageQuality} />
+        <Field label="ملاحظة"><Textarea value={note} onChange={(event) => setNote(event.target.value)} disabled={!canManageQuality} /></Field>
       </CardContent>
     </Card>
     <Card className="rounded-lg">
@@ -1966,18 +2007,22 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         <InvoicePreview parts={parts} services={services} />
         <p className="text-sm text-muted-foreground">صور ما بعد الإصلاح والقطعة المعطوبة محفوظة مع الحالة ويمكن ربطها كمرفقات عند تفعيل تكامل WhatsApp/SMS لاحقا.</p>
         <div className="flex flex-wrap gap-3">
-          <CaseInvoicePreviewButton
+          {canPreviewInvoice ? (
+            <CaseInvoicePreviewButton
               details={details}
               label="معاينة الفاتورة"
             />
-          <Button type="button" variant="outline" onClick={() => setIsReadyDialogOpen(true)}>
-            <Send />
-            Send Ready Message
-          </Button>
-          <Button type="button" variant="outline" onClick={markReceived}>تم الاستلام</Button>
-          <Button type="button" onClick={finalizeOperation} disabled={!details.caseData.customerReceivedAt}>إنهاء العملية</Button>
+          ) : null}
+          {canSendReadyNotification ? (
+            <Button type="button" variant="outline" onClick={() => setIsReadyDialogOpen(true)}>
+              <Send />
+              Send Ready Message
+            </Button>
+          ) : null}
+          {canMarkCustomerReceived ? <Button type="button" variant="outline" onClick={markReceived}>تم الاستلام</Button> : null}
+          {canManageQuality ? <Button type="button" onClick={finalizeOperation} disabled={!details.caseData.customerReceivedAt}>إنهاء العملية</Button> : null}
         </div>
-        <Dialog open={isReadyDialogOpen} onOpenChange={setIsReadyDialogOpen}>
+        <Dialog open={canSendReadyNotification && isReadyDialogOpen} onOpenChange={setIsReadyDialogOpen}>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl" dir="rtl">
             <DialogHeader>
               <DialogTitle>إرسال إشعار الجاهزية</DialogTitle>
@@ -2210,18 +2255,20 @@ function ImageUploadGrid({
   label,
   images,
   uploading,
+  disabled,
   onUpload,
 }: {
   label: string;
   images: string[];
   uploading?: boolean;
+  disabled?: boolean;
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
     <div className="grid gap-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Label>{label}</Label>
-        <Input className="max-w-sm" type="file" accept="image/*" multiple onChange={onUpload} disabled={uploading} />
+        <Input className="max-w-sm" type="file" accept="image/*" multiple onChange={onUpload} disabled={uploading || disabled} />
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {images.length === 0 ? (
@@ -2238,18 +2285,20 @@ function VideoUploadGrid({
   label,
   videos,
   uploading,
+  disabled,
   onUpload,
 }: {
   label: string;
   videos: string[];
   uploading?: boolean;
+  disabled?: boolean;
   onUpload: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
     <div className="grid gap-3 rounded-lg border p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Label>{label}</Label>
-        <Input className="max-w-sm" type="file" accept="video/mp4,video/quicktime,video/webm" onChange={onUpload} disabled={uploading} />
+        <Input className="max-w-sm" type="file" accept="video/mp4,video/quicktime,video/webm" onChange={onUpload} disabled={uploading || disabled} />
       </div>
       <p className="text-xs text-muted-foreground">الحد الأقصى للفيديو الواحد هو 25 ميجابايت، ويتم حفظه كرابط عام عبر Supabase Storage.</p>
       <div className="grid gap-3 sm:grid-cols-2">

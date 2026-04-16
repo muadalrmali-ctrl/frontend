@@ -8,7 +8,9 @@ import {
 } from "@/components/cases/case-badges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CASE_COLUMN_PERMISSION_MAP, hasPermission } from "@/lib/access-control";
 import { cn } from "@/lib/utils";
+import { getStoredUser } from "@/providers/auth-provider";
 
 type CaseRecord = {
   id: number;
@@ -86,6 +88,16 @@ const ALLOWED_BOARD_TRANSITIONS: Record<string, string[]> = {
   not_repairable: ["diagnosing", "waiting_part"],
 };
 
+const STATUS_TRANSITION_PERMISSION_MAP: Record<string, string> = {
+  received: "cases.diagnosis.edit",
+  waiting_part: "cases.diagnosis.edit",
+  diagnosing: "cases.diagnosis.edit",
+  waiting_approval: "cases.diagnosis.edit",
+  in_progress: "cases.approval.prepare_execution",
+  repaired: "cases.in_progress.mark_repaired",
+  not_repairable: "cases.diagnosis.edit",
+};
+
 const normalizeStatus = (status: string) => status.trim().toLowerCase();
 
 const getWorkflowStatus = (status: string) => {
@@ -97,12 +109,23 @@ const getWorkflowStatus = (status: string) => {
   );
 };
 
+const canMoveCaseFromStatus = (user: ReturnType<typeof getStoredUser>, status: string) => {
+  const workflowStatus = getWorkflowStatus(status);
+  const allowedTransitions = ALLOWED_BOARD_TRANSITIONS[workflowStatus] ?? [];
+  return allowedTransitions.some((targetStatus) => {
+    const permissionKey = STATUS_TRANSITION_PERMISSION_MAP[targetStatus];
+    return !permissionKey || hasPermission(user, permissionKey);
+  });
+};
+
 const getDeviceName = (caseItem: CaseRecord) =>
   [caseItem.deviceBrand, caseItem.deviceApplianceType, caseItem.deviceModelName]
     .filter(Boolean)
     .join(" ") || "-";
 
 export function CasesPage() {
+  const currentUser = getStoredUser();
+  const canCreateCase = hasPermission(currentUser, "cases.create");
   const [collapsedColumns, setCollapsedColumns] = useState<string[]>([]);
   const [draggedCase, setDraggedCase] = useState<CaseRecord | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
@@ -113,13 +136,15 @@ export function CasesPage() {
 
   const cases = result.data ?? [];
   const groupedCases = useMemo(() => {
-    return WORKFLOW_COLUMNS.map((column) => ({
-      ...column,
-      cases: cases.filter((caseItem) =>
-        column.statuses.includes(normalizeStatus(caseItem.status))
-      ),
-    }));
-  }, [cases]);
+    return WORKFLOW_COLUMNS
+      .filter((column) => hasPermission(currentUser, CASE_COLUMN_PERMISSION_MAP[column.targetStatus] ?? "cases.view"))
+      .map((column) => ({
+        ...column,
+        cases: cases.filter((caseItem) =>
+          column.statuses.includes(normalizeStatus(caseItem.status))
+        ),
+      }));
+  }, [cases, currentUser]);
 
   const toggleColumn = (key: string) => {
     setCollapsedColumns((current) =>
@@ -137,6 +162,12 @@ export function CasesPage() {
 
     if (!ALLOWED_BOARD_TRANSITIONS[fromStatus]?.includes(toStatus)) {
       setTransitionError("هذه الحركة غير مسموحة في سير العمل.");
+      return;
+    }
+
+    const requiredPermission = STATUS_TRANSITION_PERMISSION_MAP[toStatus];
+    if (requiredPermission && !hasPermission(currentUser, requiredPermission)) {
+      setTransitionError("لا تملك صلاحية تنفيذ هذا الانتقال.");
       return;
     }
 
@@ -173,12 +204,12 @@ export function CasesPage() {
             تابع كل حالة عبر مراحل الصيانة واسحب البطاقات بين الأعمدة المسموحة.
           </p>
         </div>
-        <Button size="lg" className="w-full sm:w-auto" asChild>
+        {canCreateCase ? <Button size="lg" className="w-full sm:w-auto" asChild>
           <Link to="/cases/create">
             <Plus />
             إنشاء حالة جديدة
           </Link>
-        </Button>
+        </Button> : null}
       </div>
 
       {transitionError && (
@@ -204,22 +235,28 @@ export function CasesPage() {
               {cases.length} حالة
             </Badge>
           </div>
-          <div className="overflow-x-auto">
-            <div className="flex min-h-[560px] min-w-max flex-row gap-4 pb-2">
-              {groupedCases.map((column) => (
-                <WorkflowLane
-                  key={column.key}
-                  column={column}
-                  isCollapsed={collapsedColumns.includes(column.key)}
-                  draggedCase={draggedCase}
-                  onToggle={() => toggleColumn(column.key)}
-                  onDragStart={(caseItem) => setDraggedCase(caseItem)}
-                  onDragEnd={() => setDraggedCase(null)}
-                  onDrop={(event) => handleDrop(event, column)}
-                />
-              ))}
+          {groupedCases.length === 0 ? (
+            <div className="rounded-2xl border border-dashed bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
+              لا توجد أعمدة متاحة لك في لوحة الحالات الحالية.
             </div>
-          </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <div className="flex min-h-[560px] min-w-max flex-row gap-4 pb-2">
+                {groupedCases.map((column) => (
+                  <WorkflowLane
+                    key={column.key}
+                    column={column}
+                    draggedCase={draggedCase}
+                    isCollapsed={collapsedColumns.includes(column.key)}
+                    onToggle={() => toggleColumn(column.key)}
+                    onDragStart={(caseItem) => setDraggedCase(caseItem)}
+                    onDragEnd={() => setDraggedCase(null)}
+                    onDrop={(event) => handleDrop(event, column)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>
@@ -243,11 +280,13 @@ function WorkflowLane({
   onDragEnd: () => void;
   onDrop: (event: DragEvent<HTMLElement>) => void;
 }) {
+  const currentUser = getStoredUser();
   const canDrop =
     draggedCase &&
     ALLOWED_BOARD_TRANSITIONS[getWorkflowStatus(draggedCase.status)]?.includes(
       column.targetStatus
-    );
+    ) &&
+    hasPermission(currentUser, STATUS_TRANSITION_PERMISSION_MAP[column.targetStatus] ?? "cases.view");
 
   return (
     <section
@@ -317,6 +356,7 @@ function WorkflowLane({
               <CaseCard
                 key={caseItem.id}
                 caseItem={caseItem}
+                draggable={canMoveCaseFromStatus(currentUser, caseItem.status)}
                 onDragStart={() => onDragStart(caseItem)}
                 onDragEnd={onDragEnd}
               />
@@ -330,20 +370,25 @@ function WorkflowLane({
 
 function CaseCard({
   caseItem,
+  draggable,
   onDragStart,
   onDragEnd,
 }: {
   caseItem: CaseRecord;
+  draggable: boolean;
   onDragStart: () => void;
   onDragEnd: () => void;
 }) {
   return (
     <Link
       to={`/cases/${caseItem.id}`}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      className="block rounded-[1.2rem] border border-border/80 bg-card p-4 shadow-2xs transition-all duration-150 hover:-translate-y-0.5 hover:border-[#cad5eb] hover:shadow-sm"
+      draggable={draggable}
+      onDragStart={draggable ? onDragStart : undefined}
+      onDragEnd={draggable ? onDragEnd : undefined}
+      className={cn(
+        "block rounded-[1.2rem] border border-border/80 bg-card p-4 shadow-2xs transition-all duration-150 hover:-translate-y-0.5 hover:border-[#cad5eb] hover:shadow-sm",
+        !draggable && "cursor-default"
+      )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">

@@ -9,6 +9,8 @@ export type BackendUser = {
   email: string;
   role: string;
   permissions: string[];
+  branchId?: number | null;
+  branchName?: string | null;
   createdAt?: string | null;
 };
 

@@ -2,12 +2,10 @@ import { DragEvent, useMemo, useState } from "react";
 import { useList, useUpdate } from "@refinedev/core";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Link } from "react-router";
-import {
-  CasePriorityBadge,
-  CaseTypeBadge,
-} from "@/components/cases/case-badges";
+import { CasePriorityBadge, CaseTypeBadge } from "@/components/cases/case-badges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CASE_COLUMN_PERMISSION_MAP, hasPermission } from "@/lib/access-control";
 import { cn } from "@/lib/utils";
 import { getStoredUser } from "@/providers/auth-provider";
@@ -21,9 +19,16 @@ type CaseRecord = {
   priority?: string | null;
   technicianName?: string | null;
   customerName?: string | null;
+  branchId?: number | null;
+  branchName?: string | null;
   deviceApplianceType?: string | null;
   deviceBrand?: string | null;
   deviceModelName?: string | null;
+};
+
+type BranchOption = {
+  id: number;
+  name: string;
 };
 
 type WorkflowColumn = {
@@ -34,6 +39,12 @@ type WorkflowColumn = {
 };
 
 const WORKFLOW_COLUMNS: WorkflowColumn[] = [
+  {
+    key: "awaiting_center_receipt",
+    label: "بانتظار الاستلام في المركز",
+    statuses: ["awaiting_center_receipt"],
+    targetStatus: "awaiting_center_receipt",
+  },
   {
     key: "received",
     label: "حالة جديدة",
@@ -79,6 +90,7 @@ const WORKFLOW_COLUMNS: WorkflowColumn[] = [
 ];
 
 const ALLOWED_BOARD_TRANSITIONS: Record<string, string[]> = {
+  awaiting_center_receipt: [],
   received: ["waiting_part", "diagnosing", "not_repairable"],
   waiting_part: ["received", "diagnosing", "not_repairable"],
   diagnosing: ["waiting_part", "waiting_approval", "not_repairable"],
@@ -89,6 +101,7 @@ const ALLOWED_BOARD_TRANSITIONS: Record<string, string[]> = {
 };
 
 const STATUS_TRANSITION_PERMISSION_MAP: Record<string, string> = {
+  awaiting_center_receipt: "cases.awaiting_center_receipt.receive",
   received: "cases.diagnosis.edit",
   waiting_part: "cases.diagnosis.edit",
   diagnosing: "cases.diagnosis.edit",
@@ -102,11 +115,7 @@ const normalizeStatus = (status: string) => status.trim().toLowerCase();
 
 const getWorkflowStatus = (status: string) => {
   const normalizedStatus = normalizeStatus(status);
-  return (
-    WORKFLOW_COLUMNS.find((column) =>
-      column.statuses.includes(normalizedStatus)
-    )?.targetStatus ?? normalizedStatus
-  );
+  return WORKFLOW_COLUMNS.find((column) => column.statuses.includes(normalizedStatus))?.targetStatus ?? normalizedStatus;
 };
 
 const canMoveCaseFromStatus = (user: ReturnType<typeof getStoredUser>, status: string) => {
@@ -119,9 +128,7 @@ const canMoveCaseFromStatus = (user: ReturnType<typeof getStoredUser>, status: s
 };
 
 const getDeviceName = (caseItem: CaseRecord) =>
-  [caseItem.deviceBrand, caseItem.deviceApplianceType, caseItem.deviceModelName]
-    .filter(Boolean)
-    .join(" ") || "-";
+  [caseItem.deviceBrand, caseItem.deviceApplianceType, caseItem.deviceModelName].filter(Boolean).join(" ") || "-";
 
 export function CasesPage() {
   const currentUser = getStoredUser();
@@ -129,29 +136,29 @@ export function CasesPage() {
   const [collapsedColumns, setCollapsedColumns] = useState<string[]>([]);
   const [draggedCase, setDraggedCase] = useState<CaseRecord | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
+  const [selectedBranchId, setSelectedBranchId] = useState("all");
   const { mutateAsync: updateStatus, mutation } = useUpdate();
-  const { result, query } = useList<CaseRecord>({
-    resource: "cases",
-  });
+  const { result, query } = useList<CaseRecord>({ resource: "cases" });
+  const branchesQuery = useList<BranchOption>({ resource: "branches" });
 
-  const cases = result.data ?? [];
+  const allCases = result.data ?? [];
+  const branchOptions = branchesQuery.result.data ?? [];
+  const cases =
+    selectedBranchId === "all"
+      ? allCases
+      : allCases.filter((caseItem) => String(caseItem.branchId ?? "") === selectedBranchId);
+
   const groupedCases = useMemo(() => {
     return WORKFLOW_COLUMNS
       .filter((column) => hasPermission(currentUser, CASE_COLUMN_PERMISSION_MAP[column.targetStatus] ?? "cases.view"))
       .map((column) => ({
         ...column,
-        cases: cases.filter((caseItem) =>
-          column.statuses.includes(normalizeStatus(caseItem.status))
-        ),
+        cases: cases.filter((caseItem) => column.statuses.includes(normalizeStatus(caseItem.status))),
       }));
   }, [cases, currentUser]);
 
   const toggleColumn = (key: string) => {
-    setCollapsedColumns((current) =>
-      current.includes(key)
-        ? current.filter((item) => item !== key)
-        : [...current, key]
-    );
+    setCollapsedColumns((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
   };
 
   const moveCase = async (caseItem: CaseRecord, toStatus: string) => {
@@ -178,17 +185,12 @@ export function CasesPage() {
         values: { toStatus },
       });
       await query.refetch();
-    } catch (error) {
-      setTransitionError(
-        error instanceof Error ? error.message : "تعذر تغيير حالة الحالة"
-      );
+    } catch (requestError) {
+      setTransitionError(requestError instanceof Error ? requestError.message : "تعذر تغيير حالة الحالة");
     }
   };
 
-  const handleDrop = async (
-    event: DragEvent<HTMLElement>,
-    column: WorkflowColumn
-  ) => {
+  const handleDrop = async (event: DragEvent<HTMLElement>, column: WorkflowColumn) => {
     event.preventDefault();
     if (!draggedCase || mutation.isPending) return;
     await moveCase(draggedCase, column.targetStatus);
@@ -200,41 +202,42 @@ export function CasesPage() {
       <div className="page-hero flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold">الحالات</h1>
-          <p className="text-muted-foreground">
-            تابع كل حالة عبر مراحل الصيانة واسحب البطاقات بين الأعمدة المسموحة.
-          </p>
+          <p className="text-muted-foreground">تابع كل حالة عبر مراحل الصيانة، مع دعم متابعة الحالات القادمة من الفروع أيضًا.</p>
         </div>
-        {canCreateCase ? <Button size="lg" className="w-full sm:w-auto" asChild>
-          <Link to="/cases/create">
-            <Plus />
-            إنشاء حالة جديدة
-          </Link>
-        </Button> : null}
+        {canCreateCase ? (
+          <Button size="lg" className="w-full sm:w-auto" asChild>
+            <Link to="/cases/create">
+              <Plus />
+              إنشاء حالة جديدة
+            </Link>
+          </Button>
+        ) : null}
       </div>
 
-      {transitionError && (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {transitionError}
-        </p>
-      )}
-      {query.isLoading && (
-        <p className="text-muted-foreground">جاري تحميل الحالات...</p>
-      )}
-      {query.error && (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {query.error.message}
-        </p>
-      )}
-      {!query.isLoading && !query.error && (
+      {transitionError ? <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{transitionError}</p> : null}
+      {query.isLoading ? <p className="text-muted-foreground">جارٍ تحميل الحالات...</p> : null}
+      {query.error ? <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{query.error.message}</p> : null}
+      {!query.isLoading && !query.error ? (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Badge
-              variant="outline"
-              className="rounded-full border-[#d6deee] bg-white px-3 py-1 text-xs font-bold text-[#415CB3]"
-            >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Badge variant="outline" className="rounded-full border-[#d6deee] bg-white px-3 py-1 text-xs font-bold text-[#415CB3]">
               {cases.length} حالة
             </Badge>
+            {branchOptions.length ? (
+              <div className="w-full max-w-xs">
+                <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+                  <SelectTrigger><SelectValue placeholder="فلترة حسب الفرع" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">كل الفروع</SelectItem>
+                    {branchOptions.map((branch) => (
+                      <SelectItem key={branch.id} value={String(branch.id)}>{branch.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
           </div>
+
           {groupedCases.length === 0 ? (
             <div className="rounded-2xl border border-dashed bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
               لا توجد أعمدة متاحة لك في لوحة الحالات الحالية.
@@ -258,7 +261,7 @@ export function CasesPage() {
             </div>
           )}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -283,9 +286,7 @@ function WorkflowLane({
   const currentUser = getStoredUser();
   const canDrop =
     draggedCase &&
-    ALLOWED_BOARD_TRANSITIONS[getWorkflowStatus(draggedCase.status)]?.includes(
-      column.targetStatus
-    ) &&
+    ALLOWED_BOARD_TRANSITIONS[getWorkflowStatus(draggedCase.status)]?.includes(column.targetStatus) &&
     hasPermission(currentUser, STATUS_TRANSITION_PERMISSION_MAP[column.targetStatus] ?? "cases.view");
 
   return (
@@ -300,50 +301,26 @@ function WorkflowLane({
         canDrop && "border-primary bg-primary/5"
       )}
     >
-      <div
-        className={cn(
-          "flex items-center gap-3 border-b border-border/70 p-3.5",
-          isCollapsed ? "justify-center" : "justify-between"
-        )}
-      >
-        {!isCollapsed && (
+      <div className={cn("flex items-center gap-3 border-b border-border/70 p-3.5", isCollapsed ? "justify-center" : "justify-between")}>
+        {!isCollapsed ? (
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="truncate text-base font-extrabold text-foreground">
-                {column.label}
-              </h2>
-              <Badge
-                variant="outline"
-                className="rounded-full border-[#d6deee] bg-[#f5f8ff] px-2.5 py-0.5 text-[11px] font-bold text-[#415CB3]"
-              >
+              <h2 className="truncate text-base font-extrabold text-foreground">{column.label}</h2>
+              <Badge variant="outline" className="rounded-full border-[#d6deee] bg-[#f5f8ff] px-2.5 py-0.5 text-[11px] font-bold text-[#415CB3]">
                 {column.cases.length} حالة
               </Badge>
             </div>
           </div>
-        )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onToggle}
-          aria-label={isCollapsed ? `توسيع ${column.label}` : `تصغير ${column.label}`}
-          className="rounded-full"
-        >
+        ) : null}
+        <Button type="button" variant="ghost" size="icon" onClick={onToggle} aria-label={isCollapsed ? `توسيع ${column.label}` : `تصغير ${column.label}`} className="rounded-full">
           {isCollapsed ? <ChevronLeft /> : <ChevronRight />}
         </Button>
       </div>
 
       {isCollapsed ? (
         <div className="flex flex-1 flex-col items-center gap-4 px-2 py-4">
-          <Badge
-            variant="outline"
-            className="rounded-full border-[#d6deee] bg-[#f5f8ff] text-[#415CB3]"
-          >
-            {column.cases.length}
-          </Badge>
-          <span className="text-sm font-semibold text-foreground [text-orientation:mixed] [writing-mode:vertical-rl]">
-            {column.label}
-          </span>
+          <Badge variant="outline" className="rounded-full border-[#d6deee] bg-[#f5f8ff] text-[#415CB3]">{column.cases.length}</Badge>
+          <span className="text-sm font-semibold text-foreground [text-orientation:mixed] [writing-mode:vertical-rl]">{column.label}</span>
         </div>
       ) : (
         <div className="flex flex-1 flex-col gap-3 p-3.5">
@@ -392,12 +369,8 @@ function CaseCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <p className="text-sm font-extrabold tracking-tight text-primary">
-            {caseItem.caseCode}
-          </p>
-          <h3 className="truncate text-[1.03rem] font-extrabold text-foreground">
-            {caseItem.customerName ?? "عميل غير محدد"}
-          </h3>
+          <p className="text-sm font-extrabold tracking-tight text-primary">{caseItem.caseCode}</p>
+          <h3 className="truncate text-[1.03rem] font-extrabold text-foreground">{caseItem.customerName ?? "عميل غير محدد"}</h3>
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <CasePriorityBadge priority={caseItem.priority} />
@@ -406,18 +379,10 @@ function CaseCard({
       </div>
 
       <div className="mt-3 space-y-2.5 text-sm text-muted-foreground">
-        <p className="leading-6">
-          <span className="font-bold text-foreground">الجهاز: </span>
-          {getDeviceName(caseItem)}
-        </p>
-        <p className="line-clamp-2 leading-6">
-          <span className="font-bold text-foreground">المشكلة: </span>
-          {caseItem.customerComplaint}
-        </p>
-        <p className="text-[13px] font-medium text-[#415CB3]">
-          <span className="font-bold">الفني: </span>
-          {caseItem.technicianName || "غير معين"}
-        </p>
+        {caseItem.branchName ? <p className="text-[13px] font-medium text-[#415CB3]"><span className="font-bold">الفرع: </span>{caseItem.branchName}</p> : null}
+        <p className="leading-6"><span className="font-bold text-foreground">الجهاز: </span>{getDeviceName(caseItem)}</p>
+        <p className="line-clamp-2 leading-6"><span className="font-bold text-foreground">المشكلة: </span>{caseItem.customerComplaint}</p>
+        <p className="text-[13px] font-medium text-[#415CB3]"><span className="font-bold">الفني: </span>{caseItem.technicianName || "غير معين"}</p>
       </div>
     </Link>
   );

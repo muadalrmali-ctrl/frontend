@@ -2,6 +2,7 @@ import { apiClient } from "@/providers/api-client";
 
 export const MAX_CASE_IMAGE_FILE_BYTES = 5 * 1024 * 1024;
 export const MAX_CASE_VIDEO_FILE_BYTES = 25 * 1024 * 1024;
+export const MAX_CASE_AUDIO_FILE_BYTES = 10 * 1024 * 1024;
 export const MAX_CASE_MEDIA_FILE_BYTES = MAX_CASE_IMAGE_FILE_BYTES;
 
 const SUPPORTED_IMAGE_MIME_TYPES = new Set([
@@ -17,8 +18,30 @@ const SUPPORTED_VIDEO_MIME_TYPES = new Set([
   "video/webm",
 ]);
 
-export type CaseMediaCategory = "post_repair" | "damaged_part" | "waiting_part";
-type UploadCaseMediaKind = "image" | "video";
+const SUPPORTED_AUDIO_MIME_TYPES = new Set([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/ogg",
+  "audio/wav",
+  "audio/webm",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/aac",
+]);
+
+export type CaseMediaCategory =
+  | "branch_handoff"
+  | "center_receipt"
+  | "repair_completion"
+  | "not_repairable"
+  | "product_image"
+  | "damaged_part_image"
+  | "general"
+  | "waiting_part"
+  | "post_repair"
+  | "damaged_part";
+
+type UploadCaseMediaKind = "image" | "video" | "audio";
 
 type UploadCaseMediaResponse = {
   id: number;
@@ -45,22 +68,37 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
 };
 
 const validateCaseMediaFile = (file: File, kind: UploadCaseMediaKind) => {
-  const supportedMimeTypes = kind === "video" ? SUPPORTED_VIDEO_MIME_TYPES : SUPPORTED_IMAGE_MIME_TYPES;
-  const maxFileBytes = kind === "video" ? MAX_CASE_VIDEO_FILE_BYTES : MAX_CASE_IMAGE_FILE_BYTES;
+  const supportedMimeTypes =
+    kind === "video"
+      ? SUPPORTED_VIDEO_MIME_TYPES
+      : kind === "audio"
+        ? SUPPORTED_AUDIO_MIME_TYPES
+        : SUPPORTED_IMAGE_MIME_TYPES;
+
+  const maxFileBytes =
+    kind === "video"
+      ? MAX_CASE_VIDEO_FILE_BYTES
+      : kind === "audio"
+        ? MAX_CASE_AUDIO_FILE_BYTES
+        : MAX_CASE_IMAGE_FILE_BYTES;
 
   if (!supportedMimeTypes.has(file.type)) {
     throw new Error(
       kind === "video"
         ? "نوع الملف غير مدعوم. يرجى اختيار فيديو MP4 أو MOV أو WEBM."
-        : "نوع الملف غير مدعوم. يرجى اختيار صورة PNG أو JPG أو WEBP أو GIF."
+        : kind === "audio"
+          ? "نوع الملف غير مدعوم. يرجى اختيار ملف صوتي MP3 أو WAV أو OGG أو WEBM أو M4A."
+          : "نوع الملف غير مدعوم. يرجى اختيار صورة PNG أو JPG أو WEBP أو GIF."
     );
   }
 
   if (file.size > maxFileBytes) {
     throw new Error(
       kind === "video"
-        ? "حجم الفيديو كبير جداً. الحد الأقصى المسموح به هو 25 ميجابايت."
-        : "حجم الملف كبير جداً. الحد الأقصى المسموح به هو 5 ميجابايت."
+        ? "حجم الفيديو كبير جدًا. الحد الأقصى المسموح به هو 25 ميجابايت."
+        : kind === "audio"
+          ? "حجم الملف الصوتي كبير جدًا. الحد الأقصى المسموح به هو 10 ميجابايت."
+          : "حجم الملف كبير جدًا. الحد الأقصى المسموح به هو 5 ميجابايت."
     );
   }
 };
@@ -107,4 +145,14 @@ export const uploadCaseVideoFile = (input: {
   uploadCaseMediaFile({
     ...input,
     kind: "video",
+  });
+
+export const uploadCaseAudioFile = (input: {
+  caseId: number;
+  mediaCategory: CaseMediaCategory;
+  file: File;
+}) =>
+  uploadCaseMediaFile({
+    ...input,
+    kind: "audio",
   });

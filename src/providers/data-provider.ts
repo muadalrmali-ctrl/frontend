@@ -27,6 +27,12 @@ const endpoints: Record<string, ResourceEndpoint> = {
     create: "/api/cases",
     update: (id) => `/api/cases/${id}`,
   },
+  branches: {
+    list: "/api/branches",
+    show: (id) => `/api/branches/${id}`,
+    create: "/api/branches",
+    update: (id) => `/api/branches/${id}`,
+  },
   "case-status": {
     update: (id) => `/api/cases/${id}/status`,
   },
@@ -61,6 +67,36 @@ const endpoints: Record<string, ResourceEndpoint> = {
   "accounting-team": {
     list: "/api/auth/team",
     show: (id) => `/api/auth/team/${id}`,
+  },
+  "accounting-suppliers": {
+    list: "/api/accounting/suppliers",
+    show: (id) => `/api/accounting/suppliers/${id}`,
+    create: "/api/accounting/suppliers",
+    update: (id) => `/api/accounting/suppliers/${id}`,
+  },
+  "accounting-devices": {
+    list: "/api/devices",
+    show: (id) => `/api/devices/${id}`,
+    create: "/api/devices",
+    update: (id) => `/api/devices/${id}`,
+  },
+  "accounting-purchases": {
+    list: "/api/accounting/purchases",
+    show: (id) => `/api/accounting/purchases/${id}`,
+    create: "/api/accounting/purchases",
+    update: (id) => `/api/accounting/purchases/${id}`,
+  },
+  "accounting-daily-expenses": {
+    list: "/api/accounting/daily-expenses",
+    show: (id) => `/api/accounting/daily-expenses/${id}`,
+    create: "/api/accounting/daily-expenses",
+    update: (id) => `/api/accounting/daily-expenses/${id}`,
+  },
+  "accounting-daily-cash": {
+    list: "/api/accounting/daily-cash",
+    show: (id) => `/api/accounting/daily-cash/${id}`,
+    create: "/api/accounting/daily-cash",
+    update: (id) => `/api/accounting/daily-cash/${id}`,
   },
   invitations: {
     list: "/api/invitations",

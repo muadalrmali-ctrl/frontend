@@ -55,9 +55,19 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   MAX_CASE_MEDIA_FILE_BYTES,
   MAX_CASE_VIDEO_FILE_BYTES,
+  uploadCaseAudioFile,
   uploadCaseImageFile,
   uploadCaseVideoFile,
 } from "@/lib/case-media-upload";
+import {
+  buildLegacyCaseAttachments,
+  filterAttachments,
+  mergeCaseAttachments,
+  normalizeCaseAttachments,
+  type CaseAttachment,
+  type RawCaseAttachment,
+} from "@/lib/case-attachments";
+import { AttachmentGallery, CaseAttachmentUploader } from "@/components/cases/case-attachments";
 import { hasPermission } from "@/lib/access-control";
 import { apiClient } from "@/providers/api-client";
 import { getStoredUser } from "@/providers/auth-provider";
@@ -65,10 +75,13 @@ import { getStoredUser } from "@/providers/auth-provider";
 type CaseDetailsResponse = {
   caseData: CaseData;
   customer: Customer | null;
+  branch: Branch | null;
   device: Device | null;
   history: CaseHistory[];
   waitingPartInventoryItem: InventoryItem | null;
   createdByUser: UserSummary | null;
+  branchCreatedByUser?: UserSummary | null;
+  centerReceivedByUser?: UserSummary | null;
   assignedTechnician: UserSummary | null;
 };
 
@@ -76,6 +89,10 @@ type CaseData = {
   id: number;
   caseCode: string;
   caseType?: string | null;
+  sourceType?: string | null;
+  branchId?: number | null;
+  branchCreatedBy?: number | null;
+  branchNotes?: string | null;
   status: string;
   customerComplaint: string;
   priority: string;
@@ -116,6 +133,9 @@ type CaseData = {
   readyNotificationMessage?: string | null;
   readyNotificationChannel?: string | null;
   readyNotificationSentAt?: string | null;
+  centerReceivedAt?: string | null;
+  centerReceivedBy?: number | null;
+  centerReceiptNotes?: string | null;
   customerReceivedAt?: string | null;
   operationFinalizedAt?: string | null;
   assignedTechnicianId?: number | null;
@@ -124,6 +144,7 @@ type CaseData = {
 };
 
 type Customer = { id: number; name: string; phone: string; address?: string | null };
+type Branch = { id: number; name: string; code: string; city: string; phone?: string | null; status: string };
 type Device = { id: number; applianceType: string; brand: string; modelName: string; modelCode?: string | null; notes?: string | null };
 type UserSummary = { id: number; name: string; email: string };
 type CaseHistory = { id: number; toStatus: string; notes?: string | null; createdAt?: string | null; actorName?: string | null; actorRole?: string | null };
@@ -155,6 +176,7 @@ type ReadyMediaOption = {
 };
 
 const statusLabels: Record<string, string> = {
+  awaiting_center_receipt: "بانتظار الاستلام في المركز",
   received: "حالة جديدة",
   waiting_part: "بانتظار القطعة",
   diagnosing: "قيد التشخيص",
@@ -442,6 +464,9 @@ export function CaseDetailsPage() {
       {details && (
         <>
           <BasicCaseInfo details={details} />
+          {(details.caseData.sourceType === "branch" || details.caseData.status === "awaiting_center_receipt") ? (
+            <BranchWorkflowSection details={details} onSaved={loadDetails} />
+          ) : null}
           {status === "waiting_part" && <WaitingPartSection details={details} onSaved={loadDetails} />}
           {status === "diagnosing" && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "waiting_approval" && <WaitingApprovalAndHandoffSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
@@ -494,6 +519,138 @@ function BasicCaseInfo({ details }: { details: CaseDetailsResponse }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+function BranchWorkflowSection({ details, onSaved }: { details: CaseDetailsResponse; onSaved: () => Promise<void> }) {
+  const currentUser = getStoredUser();
+  const canConfirmCenterReceipt = hasPermission(currentUser, "cases.awaiting_center_receipt.receive");
+  const [attachments, setAttachments] = useState<CaseAttachment[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [centerReceiptNotes, setCenterReceiptNotes] = useState(details.caseData.centerReceiptNotes || "");
+  const { open } = useNotification();
+
+  const loadAttachments = async () => {
+    const media = await apiClient<RawCaseAttachment[]>(`/api/media/case/${details.caseData.id}`);
+    setAttachments(normalizeCaseAttachments(media));
+  };
+
+  useEffect(() => {
+    loadAttachments().catch((loadError) => {
+      setError(loadError instanceof Error ? loadError.message : "تعذر تحميل مرفقات الحالة.");
+    });
+  }, [details.caseData.id]);
+
+  const branchHandoffAttachments = attachments.filter((attachment) => attachment.category === "branch_handoff");
+  const centerReceiptAttachments = attachments.filter((attachment) => attachment.category === "center_receipt");
+
+  const uploadCenterReceiptImages = async (files: File[]) => {
+    setError(null);
+    setIsUploading(true);
+
+    try {
+      for (const file of files) {
+        await uploadCaseImageFile({
+          caseId: details.caseData.id,
+          mediaCategory: "center_receipt",
+          file,
+        });
+      }
+      await loadAttachments();
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "تعذر رفع صور الاستلام في المركز.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const confirmCenterReceipt = async () => {
+    setError(null);
+    setIsConfirming(true);
+
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}/center-receipt`, {
+        method: "PATCH",
+        body: {
+          notes: centerReceiptNotes || undefined,
+        },
+      });
+      open?.({ type: "success", message: "تم الاستلام في المركز", description: "انتقلت الحالة الآن إلى بداية دورة الصيانة العادية." });
+      await onSaved();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "تعذر تأكيد الاستلام في المركز.");
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  return (
+    <Card className="rounded-lg border-primary/20">
+      <CardHeader><CardTitle>بيانات الفرع والاستلام في المركز</CardTitle></CardHeader>
+      <CardContent className="grid gap-5">
+        {error ? <ErrorMessage message={error} /> : null}
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Info label="مصدر الحالة" value={details.caseData.sourceType === "branch" ? "فرع / مركز بيع" : "المركز الرئيسي"} />
+          <Info label="اسم الفرع" value={details.branch?.name || "-"} />
+          <Info label="كود الفرع" value={details.branch?.code || "-"} />
+          <Info label="حالة الاستلام في المركز" value={details.caseData.centerReceivedAt ? "تم الاستلام في المركز" : "بانتظار الاستلام"} />
+          <Info label="أنشأها من الفرع" value={details.branchCreatedByUser?.name || "-"} />
+          <Info label="وقت الاستلام في المركز" value={formatDate(details.caseData.centerReceivedAt)} />
+          <Info label="تم الاستلام بواسطة" value={details.centerReceivedByUser?.name || "-"} />
+          <Info label="الفرع / المدينة" value={details.branch?.city || "-"} />
+        </div>
+        <Info label="ملاحظات الفرع" value={details.caseData.branchNotes || "-"} />
+        <Info label="ملاحظات الاستلام في المركز" value={details.caseData.centerReceiptNotes || "-"} />
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <div className="space-y-3">
+            <h3 className="font-semibold">مرفقات إرسال الفرع</h3>
+            <AttachmentGallery
+              attachments={branchHandoffAttachments}
+              emptyMessage="لا توجد صور أو فيديوهات مرفوعة من الفرع حتى الآن."
+              className="grid gap-3 sm:grid-cols-2"
+            />
+          </div>
+          <div className="space-y-3">
+            <h3 className="font-semibold">مرفقات الاستلام في المركز</h3>
+            <AttachmentGallery
+              attachments={centerReceiptAttachments}
+              emptyMessage="لا توجد صور استلام مضافة من المركز."
+              className="grid gap-3 sm:grid-cols-2"
+            />
+          </div>
+        </div>
+
+        {canConfirmCenterReceipt ? (
+          <div className="grid gap-4 rounded-lg border p-4">
+            <CaseAttachmentUploader
+              title="صور الاستلام في المركز"
+              description="يمكن رفع صور عند استلام الجهاز فعليًا في المركز الرئيسي."
+              type="image"
+              accept="image/*"
+              attachments={centerReceiptAttachments.filter((attachment) => attachment.type === "image")}
+              uploading={isUploading}
+              disabled={isConfirming}
+              maxItems={6}
+              uploadLabel="رفع صور الاستلام"
+              onUpload={uploadCenterReceiptImages}
+            />
+            <Field label="ملاحظات الاستلام في المركز">
+              <Textarea value={centerReceiptNotes} onChange={(event) => setCenterReceiptNotes(event.target.value)} className="min-h-24" />
+            </Field>
+            {details.caseData.status === "awaiting_center_receipt" ? (
+              <div className="flex justify-end">
+                <Button type="button" onClick={confirmCenterReceipt} disabled={isConfirming}>
+                  {isConfirming ? "جارٍ تأكيد الاستلام..." : "تم الاستلام في المركز"}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1652,7 +1809,47 @@ function NotRepairableSection({ details, onSaved }: { details: CaseDetailsRespon
   const navigate = useNavigate();
   const { open } = useNotification();
   const [reason, setReason] = useState(details.caseData.notRepairableReason || details.caseData.finalResult || "");
+  const [attachments, setAttachments] = useState<CaseAttachment[]>([]);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const loadAttachments = async () => {
+    const media = await apiClient<RawCaseAttachment[]>(`/api/media/case/${details.caseData.id}`);
+    setAttachments(normalizeCaseAttachments(media));
+  };
+
+  useEffect(() => {
+    loadAttachments().catch((loadError) => {
+      setError(loadError instanceof Error ? loadError.message : "تعذر تحميل مرفقات الحالة.");
+    });
+  }, [details.caseData.id]);
+
+  const uploadFiles = async (
+    files: File[],
+    uploader: (file: File) => Promise<unknown>
+  ) => {
+    setError(null);
+    setIsUploadingMedia(true);
+
+    try {
+      for (const file of files) {
+        await uploader(file);
+      }
+
+      await loadAttachments();
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : "تعذر رفع المرفقات.";
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
+  const productImages = filterAttachments(attachments, { type: "image", category: "product_image" });
+  const damagedPartImages = filterAttachments(attachments, { type: "image", category: "damaged_part_image" });
+  const videos = filterAttachments(attachments, { type: "video", category: "not_repairable" });
+  const audios = filterAttachments(attachments, { type: "audio", category: "not_repairable" });
 
   const finalizeOperation = async () => {
     setError(null);
@@ -1695,6 +1892,88 @@ function NotRepairableSection({ details, onSaved }: { details: CaseDetailsRespon
           disabled={!canFinalizeOperation}
         />
       </Field>
+      <CaseAttachmentUploader
+        title="صور المنتج"
+        description="أرفق صور الجهاز أو المنتج قبل إنهاء العملية."
+        type="image"
+        accept="image/*"
+        attachments={productImages}
+        uploading={isUploadingMedia}
+        disabled={!canFinalizeOperation}
+        maxItems={6}
+        uploadLabel="رفع صور المنتج"
+        onUpload={(files) =>
+          uploadFiles(files, (file) =>
+            uploadCaseImageFile({
+              caseId: details.caseData.id,
+              mediaCategory: "product_image",
+              file,
+            })
+          )
+        }
+      />
+      <CaseAttachmentUploader
+        title="صور القطعة التالفة"
+        description="توثيق بصري للأجزاء التالفة في الحالة غير القابلة للإصلاح."
+        type="image"
+        accept="image/*"
+        attachments={damagedPartImages}
+        uploading={isUploadingMedia}
+        disabled={!canFinalizeOperation}
+        maxItems={6}
+        uploadLabel="رفع صور القطعة"
+        onUpload={(files) =>
+          uploadFiles(files, (file) =>
+            uploadCaseImageFile({
+              caseId: details.caseData.id,
+              mediaCategory: "damaged_part_image",
+              file,
+            })
+          )
+        }
+      />
+      <CaseAttachmentUploader
+        title="فيديو توضيحي"
+        description="يمكنك إرفاق فيديو قصير يوضح المشكلة أو حالة المنتج."
+        type="video"
+        accept="video/mp4,video/quicktime,video/webm"
+        attachments={videos}
+        uploading={isUploadingMedia}
+        disabled={!canFinalizeOperation}
+        maxItems={3}
+        multiple={false}
+        uploadLabel="رفع فيديو"
+        onUpload={(files) =>
+          uploadFiles(files, (file) =>
+            uploadCaseVideoFile({
+              caseId: details.caseData.id,
+              mediaCategory: "not_repairable",
+              file,
+            })
+          )
+        }
+      />
+      <CaseAttachmentUploader
+        title="ملاحظات صوتية"
+        description="سجل ملاحظة صوتية من الميكروفون أو ارفع ملفًا صوتيًا محفوظًا."
+        type="audio"
+        accept="audio/mpeg,audio/mp3,audio/ogg,audio/wav,audio/webm,audio/mp4,audio/x-m4a,audio/aac"
+        attachments={audios}
+        uploading={isUploadingMedia}
+        disabled={!canFinalizeOperation}
+        maxItems={6}
+        enableRecorder
+        uploadLabel="رفع ملف صوتي"
+        onUpload={(files) =>
+          uploadFiles(files, (file) =>
+            uploadCaseAudioFile({
+              caseId: details.caseData.id,
+              mediaCategory: "not_repairable",
+              file,
+            })
+          )
+        }
+      />
       {error && <ErrorMessage message={error} />}
       <div className="flex flex-wrap gap-3">
         {canFinalizeOperation ? (
@@ -1739,6 +2018,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
   const [isSendingReady, setIsSendingReady] = useState(false);
   const [selectedReadyMediaUrls, setSelectedReadyMediaUrls] = useState<string[]>([]);
   const [isUploadingRepairMedia, setIsUploadingRepairMedia] = useState(false);
+  const [caseAttachments, setCaseAttachments] = useState<CaseAttachment[]>([]);
   const [error, setError] = useState<string | null>(null);
   const customerName = details.customer?.name || "العميل";
   const customerPhone = details.customer?.phone || "";
@@ -1778,6 +2058,46 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         .map((item) => item.imageUrl),
     [availableReadyMedia, selectedReadyMediaUrls]
   );
+  const loadAttachments = async () => {
+    const media = await apiClient<RawCaseAttachment[]>(`/api/media/case/${details.caseData.id}`);
+    setCaseAttachments(normalizeCaseAttachments(media));
+  };
+  const legacyAttachments = useMemo(
+    () =>
+      buildLegacyCaseAttachments({
+        caseId: details.caseData.id,
+        repairImages,
+        repairVideos,
+        damagedPartImages,
+      }),
+    [damagedPartImages, details.caseData.id, repairImages, repairVideos]
+  );
+  const mergedAttachments = useMemo(
+    () => mergeCaseAttachments(caseAttachments, legacyAttachments),
+    [caseAttachments, legacyAttachments]
+  );
+  const repairImageAttachments = useMemo(
+    () => filterAttachments(mergedAttachments, { type: "image", category: "repair_completion" }),
+    [mergedAttachments]
+  );
+  const repairVideoAttachments = useMemo(
+    () => filterAttachments(mergedAttachments, { type: "video", category: "repair_completion" }),
+    [mergedAttachments]
+  );
+  const damagedPartAttachments = useMemo(
+    () => filterAttachments(mergedAttachments, { type: "image", category: "damaged_part_image" }),
+    [mergedAttachments]
+  );
+  const repairAudioAttachments = useMemo(
+    () => filterAttachments(mergedAttachments, { type: "audio", category: "repair_completion" }),
+    [mergedAttachments]
+  );
+
+  useEffect(() => {
+    loadAttachments().catch((loadError) => {
+      setError(loadError instanceof Error ? loadError.message : "تعذر تحميل مرفقات الحالة.");
+    });
+  }, [details.caseData.id]);
 
   useEffect(() => {
     if (!isReadyDialogOpen) return;
@@ -1855,6 +2175,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
       });
 
       setter(nextImages);
+      await loadAttachments();
       setError(null);
     } catch (error) {
       setError(error instanceof Error ? error.message : "ØªØ¹Ø°Ø± Ø±ÙØ¹ Ø§Ù„ØµÙˆØ±");
@@ -1897,12 +2218,53 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
       });
 
       setRepairVideos(nextVideos);
+      await loadAttachments();
       setError(null);
     } catch (error) {
       setError(error instanceof Error ? error.message : "تعذر رفع الفيديو");
     } finally {
       setIsUploadingRepairMedia(false);
       event.target.value = "";
+    }
+  };
+
+  const uploadRepairAttachments = async (
+    files: File[],
+    uploader: (file: File) => Promise<unknown>,
+    afterUpload?: (urls: string[]) => Promise<void> | void
+  ) => {
+    setError(null);
+    setIsUploadingRepairMedia(true);
+
+    try {
+      const uploadedUrls: string[] = [];
+
+      for (const file of files) {
+        const uploadedMedia = await uploader(file);
+        const publicUrl =
+          typeof uploadedMedia === "object" &&
+          uploadedMedia !== null &&
+          "publicUrl" in uploadedMedia &&
+          typeof uploadedMedia.publicUrl === "string"
+            ? uploadedMedia.publicUrl
+            : null;
+
+        if (publicUrl) {
+          uploadedUrls.push(publicUrl);
+        }
+      }
+
+      if (afterUpload) {
+        await afterUpload(uploadedUrls);
+      }
+
+      await loadAttachments();
+    } catch (uploadError) {
+      const message = uploadError instanceof Error ? uploadError.message : "تعذر رفع المرفقات.";
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setIsUploadingRepairMedia(false);
     }
   };
 
@@ -1995,9 +2357,124 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         <Field label="عدد مرات الاختبار"><Input type="number" min="1" value={testCount} onChange={(event) => setTestCount(event.target.value)} disabled={!canManageQuality} /></Field>
         <label className="flex items-center gap-2 rounded-lg border p-3"><input type="checkbox" checked={cleaned} onChange={(event) => setCleaned(event.target.checked)} disabled={!canManageQuality} /> تم تنظيف الجهاز</label>
         <Field label="نصائح فنية للعميل"><Textarea value={recommendations} onChange={(event) => setRecommendations(event.target.value)} disabled={!canManageQuality} /></Field>
-        <ImageUploadGrid label="صور الجهاز بعد الإصلاح" images={repairImages} onUpload={(event) => uploadImagesToSupabase(event, setRepairImages, repairImages, "post_repair", "postRepairImages")} uploading={isUploadingRepairMedia} disabled={!canManageQuality} />
-        <VideoUploadGrid label="فيديو الجهاز بعد الإصلاح" videos={repairVideos} onUpload={uploadVideosToSupabase} uploading={isUploadingRepairMedia} disabled={!canManageQuality} />
-        <ImageUploadGrid label="القطعة المعطوبة" images={damagedPartImages} onUpload={(event) => uploadImagesToSupabase(event, setDamagedPartImages, damagedPartImages, "damaged_part", "postRepairDamagedPartImages")} uploading={isUploadingRepairMedia} disabled={!canManageQuality} />
+        <CaseAttachmentUploader
+          title="صور الجهاز بعد الإصلاح"
+          description="تظل الصور مرتبطة بالحالة وتظهر أيضًا في صفحة العمليات المكتملة."
+          type="image"
+          accept="image/*"
+          attachments={repairImageAttachments}
+          uploading={isUploadingRepairMedia}
+          disabled={!canManageQuality}
+          maxItems={4}
+          uploadLabel="رفع صور بعد الإصلاح"
+          onUpload={(files) =>
+            uploadRepairAttachments(
+              files,
+              (file) =>
+                uploadCaseImageFile({
+                  caseId: details.caseData.id,
+                  mediaCategory: "post_repair",
+                  file,
+                }),
+              async (urls) => {
+                const nextImages = [...repairImages, ...urls].slice(0, 4);
+                await apiClient(`/api/cases/${details.caseData.id}`, {
+                  method: "PATCH",
+                  body: {
+                    postRepairImages: stringifyImageList(nextImages),
+                  },
+                });
+                setRepairImages(nextImages);
+              }
+            )
+          }
+        />
+        <CaseAttachmentUploader
+          title="فيديو الجهاز بعد الإصلاح"
+          description="يتم رفع الفيديو إلى Supabase Storage مع رابط عام للحالة."
+          type="video"
+          accept="video/mp4,video/quicktime,video/webm"
+          attachments={repairVideoAttachments}
+          uploading={isUploadingRepairMedia}
+          disabled={!canManageQuality}
+          maxItems={2}
+          multiple={false}
+          uploadLabel="رفع فيديو"
+          onUpload={(files) =>
+            uploadRepairAttachments(
+              files,
+              (file) =>
+                uploadCaseVideoFile({
+                  caseId: details.caseData.id,
+                  mediaCategory: "post_repair",
+                  file,
+                }),
+              async (urls) => {
+                const nextVideos = [...repairVideos, ...urls].slice(0, 2);
+                await apiClient(`/api/cases/${details.caseData.id}`, {
+                  method: "PATCH",
+                  body: {
+                    postRepairVideos: stringifyImageList(nextVideos),
+                  },
+                });
+                setRepairVideos(nextVideos);
+              }
+            )
+          }
+        />
+        <CaseAttachmentUploader
+          title="القطعة المعطوبة"
+          description="يمكن توثيق القطعة المعطوبة بصور تبقى محفوظة مع الحالة."
+          type="image"
+          accept="image/*"
+          attachments={damagedPartAttachments}
+          uploading={isUploadingRepairMedia}
+          disabled={!canManageQuality}
+          maxItems={4}
+          uploadLabel="رفع صور القطعة"
+          onUpload={(files) =>
+            uploadRepairAttachments(
+              files,
+              (file) =>
+                uploadCaseImageFile({
+                  caseId: details.caseData.id,
+                  mediaCategory: "damaged_part",
+                  file,
+                }),
+              async (urls) => {
+                const nextImages = [...damagedPartImages, ...urls].slice(0, 4);
+                await apiClient(`/api/cases/${details.caseData.id}`, {
+                  method: "PATCH",
+                  body: {
+                    postRepairDamagedPartImages: stringifyImageList(nextImages),
+                  },
+                });
+                setDamagedPartImages(nextImages);
+              }
+            )
+          }
+        />
+        <CaseAttachmentUploader
+          title="ملاحظات صوتية بعد الإصلاح"
+          description="سجل شرحًا صوتيًا للأعمال المنجزة أو ارفع ملفًا صوتيًا من الجهاز."
+          type="audio"
+          accept="audio/mpeg,audio/mp3,audio/ogg,audio/wav,audio/webm,audio/mp4,audio/x-m4a,audio/aac"
+          attachments={repairAudioAttachments}
+          uploading={isUploadingRepairMedia}
+          disabled={!canManageQuality}
+          maxItems={6}
+          enableRecorder
+          uploadLabel="رفع ملف صوتي"
+          onUpload={(files) =>
+            uploadRepairAttachments(files, (file) =>
+              uploadCaseAudioFile({
+                caseId: details.caseData.id,
+                mediaCategory: "repair_completion",
+                file,
+              })
+            )
+          }
+        />
         <Field label="ملاحظة"><Textarea value={note} onChange={(event) => setNote(event.target.value)} disabled={!canManageQuality} /></Field>
       </CardContent>
     </Card>

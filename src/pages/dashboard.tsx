@@ -26,10 +26,12 @@ type DashboardSummary = {
   completedCases: number;
   totalCustomers: number;
   totalDevices: number;
+  totalBranches: number;
   totalInventoryItems: number;
   lowStockItems: number;
   totalInvoices: number;
   pendingInvoices: number;
+  awaitingCenterReceiptCases: number;
 };
 
 type RevenueSummary = {
@@ -147,6 +149,13 @@ export function DashboardPage() {
       tone: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
     },
     {
+      title: "الفروع",
+      value: summaryData?.totalBranches,
+      hint: "عدد الفروع أو مراكز البيع المرتبطة بالنظام",
+      icon: <UsersRound className="size-5" />,
+      tone: "bg-lime-100 text-lime-700 dark:bg-lime-500/15 dark:text-lime-300",
+    },
+    {
       title: "أصناف المخزون",
       value: summaryData?.totalInventoryItems,
       hint: "عدد العناصر المتاحة في المخزون",
@@ -159,6 +168,13 @@ export function DashboardPage() {
       hint: "عناصر تحتاج متابعة وشراء",
       icon: <CircleAlert className="size-5" />,
       tone: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
+    },
+    {
+      title: "بانتظار الاستلام",
+      value: summaryData?.awaitingCenterReceiptCases,
+      hint: "حالات أنشأتها الفروع ولم يتم استلامها بعد في المركز",
+      icon: <CircleAlert className="size-5" />,
+      tone: "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300",
     },
   ];
 

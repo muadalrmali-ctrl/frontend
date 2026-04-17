@@ -5,6 +5,7 @@ export const APP_ROLES = [
   "store_manager",
   "technician_manager",
   "maintenance_manager",
+  "branch_user",
 ] as const;
 
 export type AppRole = (typeof APP_ROLES)[number];
@@ -12,6 +13,7 @@ export type AppRole = (typeof APP_ROLES)[number];
 export type AuthUserLike = {
   role?: string | null;
   permissions?: string[] | null;
+  branchId?: number | null;
 } | null | undefined;
 
 export const ROLE_LABELS: Record<AppRole, string> = {
@@ -21,24 +23,34 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   store_manager: "مدير مخزن",
   technician_manager: "مسؤول الفنيين",
   maintenance_manager: "مدير الصيانة",
+  branch_user: "مستخدم فرع",
 };
 
 const LEGACY_RESOURCE_ACCESS: Record<string, AppRole[]> = {
   dashboard: ["admin", "receptionist", "technician", "store_manager", "technician_manager", "maintenance_manager"],
-  cases: ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager"],
-  "maintenance-operations": ["admin", "receptionist", "technician", "technician_manager", "maintenance_manager"],
+  branches: ["admin", "receptionist", "maintenance_manager"],
+  cases: ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager", "branch_user"],
+  "center-receipts": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
+  "maintenance-operations": ["admin", "receptionist", "technician", "technician_manager", "maintenance_manager", "branch_user"],
   inventory: ["admin", "store_manager"],
   sales: ["admin", "receptionist", "store_manager"],
   reports: ["admin", "receptionist", "store_manager", "technician_manager", "maintenance_manager"],
   accounting: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
   "accounting-customers": ["admin", "receptionist"],
   "accounting-team": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
-  "invoice-preview": ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager"],
+  "accounting-suppliers": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
+  "accounting-devices": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
+  "accounting-purchases": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
+  "accounting-daily-expenses": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
+  "accounting-daily-cash": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
+  "invoice-preview": ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager", "branch_user"],
 };
 
 export const RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
   dashboard: ["dashboard.view"],
+  branches: ["branches.view"],
   cases: ["cases.view"],
+  "center-receipts": ["cases.column.awaiting_center_receipt.view"],
   "maintenance-operations": ["maintenance_operations.view"],
   inventory: ["inventory.view"],
   sales: ["sales.view"],
@@ -46,6 +58,11 @@ export const RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
   accounting: ["accounting.view"],
   "accounting-customers": ["accounting.customers.view"],
   "accounting-team": ["accounting.team.view"],
+  "accounting-suppliers": ["accounting.suppliers.view"],
+  "accounting-devices": ["accounting.devices.view"],
+  "accounting-purchases": ["accounting.purchases.view"],
+  "accounting-daily-expenses": ["accounting.expenses.view"],
+  "accounting-daily-cash": ["accounting.daily_cash.view"],
   "invoice-preview": [
     "cases.diagnosis.invoice.preview",
     "cases.approval.invoice.preview",
@@ -57,6 +74,7 @@ export const RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
 };
 
 export const CASE_COLUMN_PERMISSION_MAP: Record<string, string> = {
+  awaiting_center_receipt: "cases.column.awaiting_center_receipt.view",
   received: "cases.column.new.view",
   waiting_part: "cases.column.waiting.view",
   diagnosing: "cases.column.diagnosis.view",
@@ -105,7 +123,9 @@ export const canAccessResource = (user: AuthUserLike | string | null | undefined
   if (!isAppRole(role)) return false;
 
   const allowedRoles = LEGACY_RESOURCE_ACCESS[resourceName];
-  if (!allowedRoles) return role === "admin";
+  if (!allowedRoles) {
+    return role === "admin";
+  }
 
   return allowedRoles.includes(role);
 };
@@ -113,6 +133,7 @@ export const canAccessResource = (user: AuthUserLike | string | null | undefined
 export const getDefaultRouteForRole = (role: string | null | undefined) => {
   switch (role) {
     case "technician":
+    case "branch_user":
       return "/cases";
     case "store_manager":
       return "/inventory";
@@ -129,12 +150,15 @@ export const getDefaultRouteForRole = (role: string | null | undefined) => {
 export const getDefaultRouteForUser = (user: AuthUserLike | string | null | undefined) => {
   const preferredRoutes: Array<{ resource: string; path: string }> = [
     { resource: "dashboard", path: "/" },
+    { resource: "center-receipts", path: "/center-receipts" },
     { resource: "cases", path: "/cases" },
+    { resource: "branches", path: "/branches" },
     { resource: "maintenance-operations", path: "/maintenance-operations" },
     { resource: "inventory", path: "/inventory" },
     { resource: "sales", path: "/sales" },
     { resource: "reports", path: "/reports" },
     { resource: "accounting", path: "/accounting" },
+    { resource: "accounting-purchases", path: "/accounting/purchases" },
   ];
 
   const accessibleRoute = preferredRoutes.find((entry) => canAccessResource(user, entry.resource));
@@ -156,7 +180,7 @@ export const getAllowedInvitationRoles = (role: string | null | undefined): AppR
   }
 
   if (role === "maintenance_manager") {
-    return ["technician", "store_manager", "receptionist"];
+    return ["technician", "store_manager", "receptionist", "branch_user"];
   }
 
   if (role === "technician_manager") {

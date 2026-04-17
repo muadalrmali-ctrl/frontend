@@ -245,18 +245,6 @@ function App() {
                 },
               },
               {
-                name: "branches",
-                list: "/branches",
-                create: "/branches/create",
-                show: "/branches/:id",
-                edit: "/branches/:id/edit",
-                meta: {
-                  label: "Branches",
-                  icon: <Building2 size={16} />,
-                  roles: ["admin", "receptionist", "maintenance_manager"],
-                },
-              },
-              {
                 name: "cases",
                 list: "/cases",
                 create: "/cases/create",
@@ -373,6 +361,19 @@ function App() {
                 },
               },
               {
+                name: "accounting-branches",
+                list: "/accounting/branches",
+                create: "/accounting/branches/create",
+                show: "/accounting/branches/:id",
+                edit: "/accounting/branches/:id/edit",
+                meta: {
+                  label: "Branches",
+                  icon: <Building2 size={16} />,
+                  parent: "accounting",
+                  roles: ["admin", "receptionist", "maintenance_manager"],
+                },
+              },
+              {
                 name: "accounting-purchases",
                 list: "/accounting/purchases",
                 create: "/accounting/purchases/create",
@@ -448,10 +449,6 @@ function App() {
                   }
                 >
                   <Route index element={<ProtectedAccessRoute resource="dashboard"><DashboardPage /></ProtectedAccessRoute>} />
-                  <Route path="branches" element={<ProtectedAccessRoute resource="branches"><BranchesPage /></ProtectedAccessRoute>} />
-                  <Route path="branches/create" element={<ProtectedAccessRoute resource="branches" requiredPermissions={["branches.manage"]}><BranchCreatePage /></ProtectedAccessRoute>} />
-                  <Route path="branches/:id" element={<ProtectedAccessRoute resource="branches"><BranchDetailsPage /></ProtectedAccessRoute>} />
-                  <Route path="branches/:id/edit" element={<ProtectedAccessRoute resource="branches" requiredPermissions={["branches.manage"]}><BranchEditPage /></ProtectedAccessRoute>} />
                   <Route path="cases" element={<ProtectedAccessRoute resource="cases"><CasesPage /></ProtectedAccessRoute>} />
                   <Route path="cases/create" element={<ProtectedAccessRoute resource="cases" requiredPermissions={["cases.create"]}><CreateCasePage /></ProtectedAccessRoute>} />
                   <Route path="cases/:id" element={<ProtectedAccessRoute resource="cases"><CaseDetailsPage /></ProtectedAccessRoute>} />
@@ -482,6 +479,10 @@ function App() {
                   <Route path="accounting/devices/create" element={<ProtectedAccessRoute resource="accounting-devices" requiredPermissions={["accounting.devices.manage"]}><AccountingDeviceCreatePage /></ProtectedAccessRoute>} />
                   <Route path="accounting/devices/:id" element={<ProtectedAccessRoute resource="accounting-devices"><AccountingDeviceDetailsPage /></ProtectedAccessRoute>} />
                   <Route path="accounting/devices/:id/edit" element={<ProtectedAccessRoute resource="accounting-devices" requiredPermissions={["accounting.devices.manage"]}><AccountingDeviceEditPage /></ProtectedAccessRoute>} />
+                  <Route path="accounting/branches" element={<ProtectedAccessRoute resource="accounting-branches"><BranchesPage /></ProtectedAccessRoute>} />
+                  <Route path="accounting/branches/create" element={<ProtectedAccessRoute resource="accounting-branches" requiredPermissions={["branches.manage"]}><BranchCreatePage /></ProtectedAccessRoute>} />
+                  <Route path="accounting/branches/:id" element={<ProtectedAccessRoute resource="accounting-branches"><BranchDetailsPage /></ProtectedAccessRoute>} />
+                  <Route path="accounting/branches/:id/edit" element={<ProtectedAccessRoute resource="accounting-branches" requiredPermissions={["branches.manage"]}><BranchEditPage /></ProtectedAccessRoute>} />
                   <Route path="accounting/purchases" element={<ProtectedAccessRoute resource="accounting-purchases"><AccountingPurchasesPage /></ProtectedAccessRoute>} />
                   <Route path="accounting/purchases/create" element={<ProtectedAccessRoute resource="accounting-purchases" requiredPermissions={["accounting.purchases.manage"]}><AccountingPurchaseCreatePage /></ProtectedAccessRoute>} />
                   <Route path="accounting/purchases/:id" element={<ProtectedAccessRoute resource="accounting-purchases"><AccountingPurchaseDetailsPage /></ProtectedAccessRoute>} />

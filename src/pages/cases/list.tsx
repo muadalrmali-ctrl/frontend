@@ -1,6 +1,6 @@
 import { DragEvent, useMemo, useState } from "react";
-import { useList, useUpdate } from "@refinedev/core";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { useCustom, useList, useUpdate } from "@refinedev/core";
+import { ArrowLeft, ChevronLeft, ChevronRight, Inbox, Plus } from "lucide-react";
 import { Link } from "react-router";
 import { CasePriorityBadge, CaseTypeBadge } from "@/components/cases/case-badges";
 import { Badge } from "@/components/ui/badge";
@@ -40,12 +40,6 @@ type WorkflowColumn = {
 
 const WORKFLOW_COLUMNS: WorkflowColumn[] = [
   {
-    key: "awaiting_center_receipt",
-    label: "بانتظار الاستلام في المركز",
-    statuses: ["awaiting_center_receipt"],
-    targetStatus: "awaiting_center_receipt",
-  },
-  {
     key: "received",
     label: "حالة جديدة",
     statuses: ["received", "new"],
@@ -65,7 +59,7 @@ const WORKFLOW_COLUMNS: WorkflowColumn[] = [
   },
   {
     key: "waiting_approval",
-    label: "بانتظار موافقة وتسجيل استلام قطعة غيار",
+    label: "بانتظار الموافقة وتسليم القطعة",
     statuses: ["waiting_approval"],
     targetStatus: "waiting_approval",
   },
@@ -90,7 +84,6 @@ const WORKFLOW_COLUMNS: WorkflowColumn[] = [
 ];
 
 const ALLOWED_BOARD_TRANSITIONS: Record<string, string[]> = {
-  awaiting_center_receipt: [],
   received: ["waiting_part", "diagnosing", "not_repairable"],
   waiting_part: ["received", "diagnosing", "not_repairable"],
   diagnosing: ["waiting_part", "waiting_approval", "not_repairable"],
@@ -101,7 +94,6 @@ const ALLOWED_BOARD_TRANSITIONS: Record<string, string[]> = {
 };
 
 const STATUS_TRANSITION_PERMISSION_MAP: Record<string, string> = {
-  awaiting_center_receipt: "cases.awaiting_center_receipt.receive",
   received: "cases.diagnosis.edit",
   waiting_part: "cases.diagnosis.edit",
   diagnosing: "cases.diagnosis.edit",
@@ -133,20 +125,39 @@ const getDeviceName = (caseItem: CaseRecord) =>
 export function CasesPage() {
   const currentUser = getStoredUser();
   const canCreateCase = hasPermission(currentUser, "cases.create");
+  const canFilterByBranch = hasPermission(currentUser, "branches.view");
+  const canViewCenterReceipts = hasPermission(currentUser, "cases.column.awaiting_center_receipt.view");
   const [collapsedColumns, setCollapsedColumns] = useState<string[]>([]);
   const [draggedCase, setDraggedCase] = useState<CaseRecord | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
   const [selectedBranchId, setSelectedBranchId] = useState("all");
   const { mutateAsync: updateStatus, mutation } = useUpdate();
   const { result, query } = useList<CaseRecord>({ resource: "cases" });
-  const branchesQuery = useList<BranchOption>({ resource: "branches" });
+  const branchesQuery = useList<BranchOption>({
+    resource: "branches",
+    queryOptions: {
+      enabled: canFilterByBranch,
+    },
+  });
+  const awaitingReceiptsQuery = useCustom<Array<{ id: number }>>({
+    url: "/api/cases/awaiting-center-receipt",
+    method: "get",
+    queryOptions: {
+      enabled: canViewCenterReceipts,
+    },
+  });
 
   const allCases = result.data ?? [];
   const branchOptions = branchesQuery.result.data ?? [];
+  const awaitingCenterReceiptCount = awaitingReceiptsQuery.result?.data?.length ?? 0;
   const cases =
     selectedBranchId === "all"
-      ? allCases
-      : allCases.filter((caseItem) => String(caseItem.branchId ?? "") === selectedBranchId);
+      ? allCases.filter((caseItem) => normalizeStatus(caseItem.status) !== "awaiting_center_receipt")
+      : allCases.filter(
+          (caseItem) =>
+            normalizeStatus(caseItem.status) !== "awaiting_center_receipt" &&
+            String(caseItem.branchId ?? "") === selectedBranchId
+        );
 
   const groupedCases = useMemo(() => {
     return WORKFLOW_COLUMNS
@@ -185,6 +196,9 @@ export function CasesPage() {
         values: { toStatus },
       });
       await query.refetch();
+      if (canViewCenterReceipts) {
+        await awaitingReceiptsQuery.query.refetch();
+      }
     } catch (requestError) {
       setTransitionError(requestError instanceof Error ? requestError.message : "تعذر تغيير حالة الحالة");
     }
@@ -202,35 +216,61 @@ export function CasesPage() {
       <div className="page-hero flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold">الحالات</h1>
-          <p className="text-muted-foreground">تابع كل حالة عبر مراحل الصيانة، مع دعم متابعة الحالات القادمة من الفروع أيضًا.</p>
+          <p className="text-muted-foreground">تابع كل حالة عبر مراحل الصيانة الداخلية مع نقطة دخول سريعة للحالات الواردة من الفروع.</p>
         </div>
-        {canCreateCase ? (
-          <Button size="lg" className="w-full sm:w-auto" asChild>
-            <Link to="/cases/create">
-              <Plus />
-              إنشاء حالة جديدة
-            </Link>
-          </Button>
-        ) : null}
+
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+          {canViewCenterReceipts ? (
+            <Button variant="outline" className="justify-between gap-3 border-[#d6deee] bg-white text-[#415CB3]" asChild>
+              <Link to="/center-receipts">
+                <span className="flex items-center gap-2">
+                  <Inbox className="size-4" />
+                  حالات الفروع بانتظار الاستلام
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  <Badge variant="outline" className="border-[#cfe6d4] bg-[#effaf1] text-[#01b224]">
+                    {awaitingCenterReceiptCount}
+                  </Badge>
+                  <ArrowLeft className="size-4" />
+                </span>
+              </Link>
+            </Button>
+          ) : null}
+
+          {canCreateCase ? (
+            <Button size="lg" className="w-full sm:w-auto" asChild>
+              <Link to="/cases/create">
+                <Plus />
+                إنشاء حالة جديدة
+              </Link>
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {transitionError ? <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{transitionError}</p> : null}
       {query.isLoading ? <p className="text-muted-foreground">جارٍ تحميل الحالات...</p> : null}
       {query.error ? <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{query.error.message}</p> : null}
+
       {!query.isLoading && !query.error ? (
         <div className="space-y-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Badge variant="outline" className="rounded-full border-[#d6deee] bg-white px-3 py-1 text-xs font-bold text-[#415CB3]">
               {cases.length} حالة
             </Badge>
-            {branchOptions.length ? (
+
+            {canFilterByBranch && branchOptions.length ? (
               <div className="w-full max-w-xs">
                 <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-                  <SelectTrigger><SelectValue placeholder="فلترة حسب الفرع" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="فلترة حسب الفرع" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">كل الفروع</SelectItem>
                     {branchOptions.map((branch) => (
-                      <SelectItem key={branch.id} value={String(branch.id)}>{branch.name}</SelectItem>
+                      <SelectItem key={branch.id} value={String(branch.id)}>
+                        {branch.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -319,7 +359,9 @@ function WorkflowLane({
 
       {isCollapsed ? (
         <div className="flex flex-1 flex-col items-center gap-4 px-2 py-4">
-          <Badge variant="outline" className="rounded-full border-[#d6deee] bg-[#f5f8ff] text-[#415CB3]">{column.cases.length}</Badge>
+          <Badge variant="outline" className="rounded-full border-[#d6deee] bg-[#f5f8ff] text-[#415CB3]">
+            {column.cases.length}
+          </Badge>
           <span className="text-sm font-semibold text-foreground [text-orientation:mixed] [writing-mode:vertical-rl]">{column.label}</span>
         </div>
       ) : (
@@ -379,10 +421,24 @@ function CaseCard({
       </div>
 
       <div className="mt-3 space-y-2.5 text-sm text-muted-foreground">
-        {caseItem.branchName ? <p className="text-[13px] font-medium text-[#415CB3]"><span className="font-bold">الفرع: </span>{caseItem.branchName}</p> : null}
-        <p className="leading-6"><span className="font-bold text-foreground">الجهاز: </span>{getDeviceName(caseItem)}</p>
-        <p className="line-clamp-2 leading-6"><span className="font-bold text-foreground">المشكلة: </span>{caseItem.customerComplaint}</p>
-        <p className="text-[13px] font-medium text-[#415CB3]"><span className="font-bold">الفني: </span>{caseItem.technicianName || "غير معين"}</p>
+        {caseItem.branchName ? (
+          <p className="text-[13px] font-medium text-[#415CB3]">
+            <span className="font-bold">الفرع: </span>
+            {caseItem.branchName}
+          </p>
+        ) : null}
+        <p className="leading-6">
+          <span className="font-bold text-foreground">الجهاز: </span>
+          {getDeviceName(caseItem)}
+        </p>
+        <p className="line-clamp-2 leading-6">
+          <span className="font-bold text-foreground">المشكلة: </span>
+          {caseItem.customerComplaint}
+        </p>
+        <p className="text-[13px] font-medium text-[#415CB3]">
+          <span className="font-bold">الفني: </span>
+          {caseItem.technicianName || "غير معين"}
+        </p>
       </div>
     </Link>
   );

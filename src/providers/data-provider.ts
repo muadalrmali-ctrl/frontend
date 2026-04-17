@@ -33,6 +33,12 @@ const endpoints: Record<string, ResourceEndpoint> = {
     create: "/api/branches",
     update: (id) => `/api/branches/${id}`,
   },
+  "accounting-branches": {
+    list: "/api/branches",
+    show: (id) => `/api/branches/${id}`,
+    create: "/api/branches",
+    update: (id) => `/api/branches/${id}`,
+  },
   "case-status": {
     update: (id) => `/api/cases/${id}/status`,
   },
@@ -181,7 +187,10 @@ export const dataProvider: DataProvider = {
     };
   },
 
-  async create<TData extends BaseRecord = BaseRecord, TVariables = {}>({
+  async create<
+    TData extends BaseRecord = BaseRecord,
+    TVariables = Record<string, unknown>
+  >({
     resource,
     variables,
   }: CreateParams<TVariables>) {
@@ -198,7 +207,10 @@ export const dataProvider: DataProvider = {
     };
   },
 
-  async update<TData extends BaseRecord = BaseRecord, TVariables = {}>({
+  async update<
+    TData extends BaseRecord = BaseRecord,
+    TVariables = Record<string, unknown>
+  >({
     resource,
     id,
     variables,
@@ -216,7 +228,10 @@ export const dataProvider: DataProvider = {
     };
   },
 
-  async deleteOne<TData extends BaseRecord = BaseRecord, TVariables = {}>(
+  async deleteOne<
+    TData extends BaseRecord = BaseRecord,
+    TVariables = Record<string, unknown>
+  >(
     params: DeleteOneParams<TVariables>
   ) {
     const endpoint = endpoints[params.resource];

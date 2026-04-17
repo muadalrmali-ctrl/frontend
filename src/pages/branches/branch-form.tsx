@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router";
 import { useCreate, useUpdate } from "@refinedev/core";
 import { Button } from "@/components/ui/button";
@@ -54,22 +54,30 @@ export function BranchFormPage({
     setError(null);
 
     const payload = {
-      name: values.name,
-      code: values.code,
-      city: values.city,
-      address: values.address || null,
-      phone: values.phone || null,
+      name: values.name.trim(),
+      code: values.code.trim(),
+      city: values.city.trim(),
+      address: values.address.trim() || null,
+      phone: values.phone.trim() || null,
       status: values.status,
-      notes: values.notes || null,
+      notes: values.notes.trim() || null,
     };
 
     try {
       if (branchId) {
-        await updateBranch({ resource: "branches", id: branchId, values: payload });
+        await updateBranch({
+          resource: "accounting-branches",
+          id: branchId,
+          values: payload,
+        });
       } else {
-        await createBranch({ resource: "branches", values: payload });
+        await createBranch({
+          resource: "accounting-branches",
+          values: payload,
+        });
       }
-      navigate("/branches");
+
+      navigate("/accounting/branches");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "تعذر حفظ الفرع");
     }
@@ -77,20 +85,41 @@ export function BranchFormPage({
 
   return (
     <section className="space-y-6" dir="rtl">
-      <AccountingPageIntro title={title} description={description} backTo="/branches" backLabel="العودة إلى الفروع" />
+      <AccountingPageIntro
+        title={title}
+        description={description}
+        backTo="/accounting/branches"
+        backLabel="العودة إلى الفروع"
+      />
+
       <ErrorBanner message={error} />
+
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
-          <CardHeader><CardTitle>بيانات الفرع</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>بيانات الفرع</CardTitle>
+          </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
-            <AccountingField label="اسم الفرع"><Input value={values.name} onChange={(event) => setField("name", event.target.value)} required /></AccountingField>
-            <AccountingField label="كود الفرع"><Input value={values.code} onChange={(event) => setField("code", event.target.value)} required /></AccountingField>
-            <AccountingField label="المدينة / المنطقة"><Input value={values.city} onChange={(event) => setField("city", event.target.value)} required /></AccountingField>
-            <AccountingField label="الهاتف"><Input value={values.phone} onChange={(event) => setField("phone", event.target.value)} /></AccountingField>
-            <AccountingField label="العنوان"><Input value={values.address} onChange={(event) => setField("address", event.target.value)} /></AccountingField>
+            <AccountingField label="اسم الفرع">
+              <Input value={values.name} onChange={(event) => setField("name", event.target.value)} required />
+            </AccountingField>
+            <AccountingField label="كود الفرع">
+              <Input value={values.code} onChange={(event) => setField("code", event.target.value)} required />
+            </AccountingField>
+            <AccountingField label="المدينة / المنطقة">
+              <Input value={values.city} onChange={(event) => setField("city", event.target.value)} required />
+            </AccountingField>
+            <AccountingField label="الهاتف">
+              <Input value={values.phone} onChange={(event) => setField("phone", event.target.value)} />
+            </AccountingField>
+            <AccountingField label="العنوان">
+              <Input value={values.address} onChange={(event) => setField("address", event.target.value)} />
+            </AccountingField>
             <AccountingField label="الحالة">
               <Select value={values.status} onValueChange={(value) => setField("status", value as BranchValues["status"])}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="active">نشط</SelectItem>
                   <SelectItem value="inactive">معطل</SelectItem>
@@ -98,13 +127,24 @@ export function BranchFormPage({
               </Select>
             </AccountingField>
             <div className="md:col-span-2">
-              <AccountingField label="ملاحظات"><Textarea value={values.notes} onChange={(event) => setField("notes", event.target.value)} className="min-h-32" /></AccountingField>
+              <AccountingField label="ملاحظات">
+                <Textarea
+                  value={values.notes}
+                  onChange={(event) => setField("notes", event.target.value)}
+                  className="min-h-32"
+                />
+              </AccountingField>
             </div>
           </CardContent>
         </Card>
+
         <div className="flex justify-end gap-3">
-          <Button type="button" variant="outline" onClick={() => navigate("/branches")}>إلغاء</Button>
-          <Button type="submit" disabled={isSaving}>{isSaving ? "جارٍ الحفظ..." : "حفظ الفرع"}</Button>
+          <Button type="button" variant="outline" onClick={() => navigate("/accounting/branches")}>
+            إلغاء
+          </Button>
+          <Button type="submit" disabled={isSaving}>
+            {isSaving ? "جارٍ الحفظ..." : "حفظ الفرع"}
+          </Button>
         </div>
       </form>
     </section>

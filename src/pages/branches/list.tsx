@@ -20,49 +20,63 @@ type Branch = {
 };
 
 export function BranchesPage() {
-  const { result, query } = useList<Branch>({ resource: "branches" });
+  const { result, query } = useList<Branch>({ resource: "accounting-branches" });
   const branches = result.data ?? [];
 
   return (
     <section className="space-y-6" dir="rtl">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <AccountingPageIntro title="الفروع" description="إدارة الفروع ومتابعة حجم الحالات القادمة منها." />
-        <Button asChild><Link to="/branches/create">إضافة فرع</Link></Button>
+        <AccountingPageIntro
+          title="الفروع"
+          description="إدارة الفروع ومتابعة الحالات الواردة منها ضمن القسم المحاسبي والإداري."
+        />
+        <Button asChild>
+          <Link to="/accounting/branches/create">إضافة فرع</Link>
+        </Button>
       </div>
+
       <ErrorBanner message={query.error?.message || null} />
+
       {query.isLoading ? <p className="text-muted-foreground">جارٍ تحميل الفروع...</p> : null}
+
       {branches.length > 0 ? (
-        <Card><CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-right">الفرع</TableHead>
-                <TableHead className="text-right">الكود</TableHead>
-                <TableHead className="text-right">المدينة</TableHead>
-                <TableHead className="text-right">الحالة</TableHead>
-                <TableHead className="text-right">الحالات</TableHead>
-                <TableHead className="text-right">بانتظار الاستلام</TableHead>
-                <TableHead className="text-right">تاريخ الإنشاء</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {branches.map((branch) => (
-                <TableRow key={branch.id}>
-                  <TableCell className="font-medium">
-                    <Link to={`/branches/${branch.id}`} className="hover:underline">{branch.name}</Link>
-                  </TableCell>
-                  <TableCell>{branch.code}</TableCell>
-                  <TableCell>{branch.city}</TableCell>
-                  <TableCell>{branch.status === "active" ? "نشط" : "معطل"}</TableCell>
-                  <TableCell>{branch.stats?.totalCases ?? 0}</TableCell>
-                  <TableCell>{branch.stats?.awaitingCenterReceipt ?? 0}</TableCell>
-                  <TableCell>{formatDate(branch.createdAt)}</TableCell>
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-right">الفرع</TableHead>
+                  <TableHead className="text-right">الكود</TableHead>
+                  <TableHead className="text-right">المدينة / المنطقة</TableHead>
+                  <TableHead className="text-right">الحالة</TableHead>
+                  <TableHead className="text-right">إجمالي الحالات</TableHead>
+                  <TableHead className="text-right">بانتظار الاستلام</TableHead>
+                  <TableHead className="text-right">تاريخ الإنشاء</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent></Card>
-      ) : !query.isLoading ? <p className="rounded-lg border p-4 text-sm text-muted-foreground">لا توجد فروع مسجلة بعد.</p> : null}
+              </TableHeader>
+              <TableBody>
+                {branches.map((branch) => (
+                  <TableRow key={branch.id}>
+                    <TableCell className="font-medium">
+                      <Link to={`/accounting/branches/${branch.id}`} className="hover:underline">
+                        {branch.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{branch.code}</TableCell>
+                    <TableCell>{branch.city}</TableCell>
+                    <TableCell>{branch.status === "active" ? "نشط" : "معطل"}</TableCell>
+                    <TableCell>{branch.stats?.totalCases ?? 0}</TableCell>
+                    <TableCell>{branch.stats?.awaitingCenterReceipt ?? 0}</TableCell>
+                    <TableCell>{formatDate(branch.createdAt)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : !query.isLoading ? (
+        <p className="rounded-lg border p-4 text-sm text-muted-foreground">لا توجد فروع مسجلة بعد.</p>
+      ) : null}
     </section>
   );
 }

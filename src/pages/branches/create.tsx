@@ -4,7 +4,7 @@ export function BranchCreatePage() {
   return (
     <BranchFormPage
       title="إضافة فرع"
-      description="إنشاء فرع جديد ليتمكن من استقبال الحالات وربط مستخدميه به."
+      description="إنشاء فرع جديد ليستقبل الحالات القادمة من مناطق البيع وربط مستخدمي الفرع به."
     />
   );
 }

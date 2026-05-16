@@ -30,8 +30,6 @@ const SUPPORTED_AUDIO_MIME_TYPES = new Set([
 ]);
 
 export type CaseMediaCategory =
-  | "branch_handoff"
-  | "center_receipt"
   | "repair_completion"
   | "not_repairable"
   | "product_image"

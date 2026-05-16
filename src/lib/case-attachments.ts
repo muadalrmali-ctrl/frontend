@@ -1,8 +1,6 @@
 export type CaseAttachmentType = "image" | "video" | "audio";
 
 export type CaseAttachmentCategory =
-  | "branch_handoff"
-  | "center_receipt"
   | "repair_completion"
   | "not_repairable"
   | "product_image"
@@ -57,8 +55,6 @@ const normalizeCategory = (value?: string | null): CaseAttachmentCategory => {
     case "damaged_part":
       return "damaged_part_image";
     case "repair_completion":
-    case "branch_handoff":
-    case "center_receipt":
     case "not_repairable":
     case "product_image":
     case "damaged_part_image":

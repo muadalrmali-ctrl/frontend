@@ -48,21 +48,13 @@ type InvitationRecord = {
   name?: string | null;
   email?: string | null;
   phone?: string | null;
-  branchId?: number | null;
-  branchName?: string | null;
   inviteUrl?: string | null;
   expiresAt: string;
   createdAt?: string | null;
 };
 
-type BranchOption = {
-  id: number;
-  name: string;
-};
-
 type InvitationFormState = {
   role: AppRole;
-  branchId: string;
   name: string;
   email: string;
   phone: string;
@@ -128,17 +120,10 @@ export function TeamPage() {
       enabled: canView,
     },
   });
-  const branchesQuery = useList<BranchOption>({
-    resource: "branches",
-    queryOptions: {
-      enabled: canManage,
-    },
-  });
   const { mutateAsync: createInvitation, mutation } = useCreate();
 
   const teamMembers = result.data ?? [];
   const invitations = useMemo(() => invitationsResult.data ?? [], [invitationsResult.data]);
-  const branches = useMemo(() => branchesQuery.result.data ?? [], [branchesQuery.result.data]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -146,7 +131,6 @@ export function TeamPage() {
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [form, setForm] = useState<InvitationFormState>({
     role: defaultRole,
-    branchId: "",
     name: "",
     email: "",
     phone: "",
@@ -154,12 +138,9 @@ export function TeamPage() {
     expiresInDays: "7",
   });
 
-  const isBranchUserRole = form.role === "branch_user";
-
   const openInviteDialog = () => {
     setForm({
       role: defaultRole,
-      branchId: "",
       name: "",
       email: "",
       phone: "",
@@ -175,16 +156,10 @@ export function TeamPage() {
     try {
       setInviteError(null);
 
-      if (isBranchUserRole && !form.branchId) {
-        setInviteError("اختر الفرع قبل إنشاء دعوة مستخدم الفرع.");
-        return;
-      }
-
       const response = (await createInvitation({
         resource: "invitations",
         values: {
           role: form.role,
-          branchId: isBranchUserRole ? Number(form.branchId) : undefined,
           name: form.name || undefined,
           email: form.email || undefined,
           phone: form.phone || undefined,
@@ -274,7 +249,7 @@ export function TeamPage() {
               إدارة الدعوات
             </CardTitle>
             <CardDescription>
-              كل دعوة تنشئ رابطًا مباشرًا لصفحة إنشاء الحساب، مع صلاحية محددة وربط اختياري بفرع عند إنشاء مستخدم فرع.
+              كل دعوة تنشئ رابطًا مباشرًا لصفحة إنشاء الحساب، مع صلاحية محددة لفريق المركز.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -300,7 +275,6 @@ export function TeamPage() {
                   <TableRow>
                     <TableHead className="text-right">الدور</TableHead>
                     <TableHead className="text-right">المدعو</TableHead>
-                    <TableHead className="text-right">الفرع</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
                     <TableHead className="text-right">الإنشاء</TableHead>
                     <TableHead className="text-right">الانتهاء</TableHead>
@@ -320,7 +294,6 @@ export function TeamPage() {
                           </p>
                         </div>
                       </TableCell>
-                      <TableCell>{invitation.branchName || "-"}</TableCell>
                       <TableCell>
                         <Badge variant={statusVariants[invitation.status]}>
                           {statusLabels[invitation.status]}
@@ -389,7 +362,6 @@ export function TeamPage() {
                     setForm((current) => ({
                       ...current,
                       role: value as AppRole,
-                      branchId: value === "branch_user" ? current.branchId : "",
                     }))
                   }
                 >
@@ -405,27 +377,6 @@ export function TeamPage() {
                   </SelectContent>
                 </Select>
               </div>
-
-              {isBranchUserRole ? (
-                <div className="grid gap-2">
-                  <Label htmlFor="invite-branch">الفرع</Label>
-                  <Select
-                    value={form.branchId}
-                    onValueChange={(value) => setForm((current) => ({ ...current, branchId: value }))}
-                  >
-                    <SelectTrigger id="invite-branch" className="w-full">
-                      <SelectValue placeholder="اختر الفرع" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branches.map((branch) => (
-                        <SelectItem key={branch.id} value={String(branch.id)}>
-                          {branch.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ) : null}
 
               <div className="grid gap-2 md:grid-cols-2">
                 <div className="grid gap-2">
@@ -512,7 +463,6 @@ export function TeamPage() {
 
               <div className="grid gap-2 md:grid-cols-2">
                 <InfoTile label="الدور" value={ROLE_LABELS[inviteResult.role] ?? inviteResult.role} />
-                <InfoTile label="الفرع" value={inviteResult.branchName || "غير مرتبط بفرع"} />
                 <InfoTile label="تاريخ الانتهاء" value={formatDate(inviteResult.expiresAt)} />
               </div>
             </div>

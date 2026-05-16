@@ -12,15 +12,12 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { uploadCaseImageFile, uploadCaseVideoFile } from "@/lib/case-media-upload";
 import { cn } from "@/lib/utils";
-import { getStoredUser } from "@/providers/auth-provider";
 
 type Priority = "منخفضة" | "متوسطة" | "مرتفعة" | "عاجلة";
 type Customer = { id: number; name: string; phone: string; address?: string | null };
 type Device = { id: number; applianceType: string; brand: string; modelName: string; modelCode?: string | null };
 type Technician = { id: number; name: string; email: string; role: string };
-type CreatedCase = { id: number };
 
 type CreateCaseValues = {
   caseType: "internal" | "external";
@@ -30,7 +27,6 @@ type CreateCaseValues = {
   customerComplaint: string;
   serialNumber: string;
   priority: Priority;
-  branchNotes: string;
 };
 
 type NewCustomerValues = { name: string; phone: string; address: string };
@@ -44,15 +40,12 @@ const initialValues: CreateCaseValues = {
   customerComplaint: "",
   serialNumber: "",
   priority: "متوسطة",
-  branchNotes: "",
 };
 
 const initialCustomerValues: NewCustomerValues = { name: "", phone: "", address: "" };
 const initialDeviceValues: NewDeviceValues = { applianceType: "", brand: "", modelName: "", modelCode: "" };
 
 export function CreateCasePage() {
-  const currentUser = getStoredUser();
-  const isBranchUser = currentUser?.role === "branch_user";
   const navigate = useNavigate();
   const { mutateAsync: createCase, mutation: caseMutation } = useCreate();
   const { mutateAsync: createRecord, mutation: recordMutation } = useCreate();
@@ -64,8 +57,6 @@ export function CreateCasePage() {
   const [newDevice, setNewDevice] = useState<NewDeviceValues>(initialDeviceValues);
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [isDeviceDialogOpen, setIsDeviceDialogOpen] = useState(false);
-  const [branchImages, setBranchImages] = useState<File[]>([]);
-  const [branchVideo, setBranchVideo] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const customers = customersQuery.result.data ?? [];
@@ -129,48 +120,34 @@ export function CreateCasePage() {
     setError(null);
 
     if (!values.selectedCustomerId) {
-      setError("اختر العميل أو أنشئ عميلًا جديدًا أولًا.");
+      setError("اختر العميل أو أنشئ عميلا جديدا أولا.");
       return;
     }
 
     if (!values.selectedDeviceId) {
-      setError("اختر الجهاز أو أنشئ جهازًا جديدًا أولًا.");
+      setError("اختر الجهاز أو أنشئ جهازا جديدا أولا.");
       return;
     }
 
-    if (!isBranchUser && (!values.selectedTechnicianId || !selectedTechnician)) {
+    if (!values.selectedTechnicianId || !selectedTechnician) {
       setError("اختر الفني المسؤول من القائمة.");
       return;
     }
 
     try {
-      const createdCase = (await createCase({
+      await createCase({
         resource: "cases",
         values: {
           customerId: values.selectedCustomerId,
           deviceId: values.selectedDeviceId,
           caseType: values.caseType,
-          sourceType: isBranchUser ? "branch" : "main_center",
-          branchNotes: values.branchNotes || undefined,
-          assignedTechnicianId: isBranchUser ? undefined : values.selectedTechnicianId,
-          technicianName: isBranchUser ? undefined : selectedTechnician?.name,
+          assignedTechnicianId: values.selectedTechnicianId,
+          technicianName: selectedTechnician.name,
           customerComplaint: values.customerComplaint,
           serialNumber: values.serialNumber || undefined,
           priority: values.priority,
         },
-      })) as { data: CreatedCase };
-
-      const caseId = createdCase.data.id;
-
-      if (caseId && branchImages.length) {
-        for (const file of branchImages) {
-          await uploadCaseImageFile({ caseId, mediaCategory: "branch_handoff", file });
-        }
-      }
-
-      if (caseId && branchVideo) {
-        await uploadCaseVideoFile({ caseId, mediaCategory: "branch_handoff", file: branchVideo });
-      }
+      });
 
       navigate("/cases");
     } catch (requestError) {
@@ -185,9 +162,7 @@ export function CreateCasePage() {
           <div>
             <h1 className="text-3xl font-semibold">إنشاء حالة جديدة</h1>
             <p className="text-muted-foreground">
-              {isBranchUser
-                ? "أدخل بيانات العميل والجهاز ثم أرسل الحالة إلى المركز الرئيسي مع ملاحظات وصور الفرع."
-                : "اختر العميل والجهاز والفني ثم أدخل وصف المشكلة لفتح حالة صيانة."}
+              اختر العميل والجهاز والفني ثم أدخل وصف المشكلة لفتح حالة صيانة.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -268,11 +243,6 @@ export function CreateCasePage() {
             <Field label="وصف العطل" htmlFor="customerComplaint">
               <Textarea id="customerComplaint" className="min-h-32" value={values.customerComplaint} onChange={(event) => setField("customerComplaint", event.target.value)} required />
             </Field>
-            {isBranchUser ? (
-              <Field label="ملاحظات الفرع">
-                <Textarea className="min-h-28" value={values.branchNotes} onChange={(event) => setField("branchNotes", event.target.value)} />
-              </Field>
-            ) : null}
           </FormSection>
 
           <FormSection title="التعيين والأولوية">
@@ -286,29 +256,23 @@ export function CreateCasePage() {
               </Select>
             </Field>
 
-            {!isBranchUser ? (
-              <Field label="الفني المسؤول">
-                <SearchableSelect
-                  emptyText="لا يوجد فنيون"
-                  placeholder="ابحث عن فني"
-                  selectedLabel={selectedTechnician?.name}
-                  items={technicians}
-                  getKey={(technician) => technician.id}
-                  getValue={(technician) => `${technician.name} ${technician.email} ${technician.role}`}
-                  renderItem={(technician) => (
-                    <div className="text-right">
-                      <p className="font-medium">{technician.name}</p>
-                      <p className="text-xs text-muted-foreground">{technician.email}</p>
-                    </div>
-                  )}
-                  onSelect={(technician) => setField("selectedTechnicianId", technician.id)}
-                />
-              </Field>
-            ) : (
-              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                ستبدأ الحالة في مسار "بانتظار الاستلام في المركز" ثم تُسند داخل المركز الرئيسي بعد الاستلام الفعلي.
-              </div>
-            )}
+            <Field label="الفني المسؤول">
+              <SearchableSelect
+                emptyText="لا يوجد فنيون"
+                placeholder="ابحث عن فني"
+                selectedLabel={selectedTechnician?.name}
+                items={technicians}
+                getKey={(technician) => technician.id}
+                getValue={(technician) => `${technician.name} ${technician.email} ${technician.role}`}
+                renderItem={(technician) => (
+                  <div className="text-right">
+                    <p className="font-medium">{technician.name}</p>
+                    <p className="text-xs text-muted-foreground">{technician.email}</p>
+                  </div>
+                )}
+                onSelect={(technician) => setField("selectedTechnicianId", technician.id)}
+              />
+            </Field>
 
             <Field label="الأولوية">
               <Select value={values.priority} onValueChange={(value) => setField("priority", value as Priority)}>
@@ -321,17 +285,6 @@ export function CreateCasePage() {
                 </SelectContent>
               </Select>
             </Field>
-
-            {isBranchUser ? (
-              <>
-                <Field label="صور من الفرع">
-                  <Input type="file" accept="image/*" multiple onChange={(event) => setBranchImages(Array.from(event.target.files ?? []))} />
-                </Field>
-                <Field label="فيديو اختياري من الفرع">
-                  <Input type="file" accept="video/mp4,video/quicktime,video/webm" onChange={(event) => setBranchVideo(event.target.files?.[0] ?? null)} />
-                </Field>
-              </>
-            ) : null}
           </FormSection>
         </div>
       </form>

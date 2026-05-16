@@ -9,20 +9,15 @@ import routerProvider, {
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import {
   BarChart3,
-  Building2,
   Calculator,
   ClipboardList,
   Cpu,
   DollarSign,
   Home,
   Package,
-  ReceiptText,
-  ScanSearch,
-  ShoppingCart,
   Truck,
   UserRound,
   Users,
-  Wallet,
   Wrench,
 } from "lucide-react";
 import "./App.css";
@@ -48,23 +43,8 @@ const DashboardPage = lazy(() =>
 const CasesPage = lazy(() =>
   import("./pages/cases/list").then((module) => ({ default: module.CasesPage }))
 );
-const BranchesPage = lazy(() =>
-  import("./pages/branches/list").then((module) => ({ default: module.BranchesPage }))
-);
-const BranchDetailsPage = lazy(() =>
-  import("./pages/branches/show").then((module) => ({ default: module.BranchDetailsPage }))
-);
-const BranchCreatePage = lazy(() =>
-  import("./pages/branches/create").then((module) => ({ default: module.BranchCreatePage }))
-);
-const BranchEditPage = lazy(() =>
-  import("./pages/branches/edit").then((module) => ({ default: module.BranchEditPage }))
-);
 const CreateCasePage = lazy(() =>
   import("./pages/cases/create").then((module) => ({ default: module.CreateCasePage }))
-);
-const CenterReceiptCasesPage = lazy(() =>
-  import("./pages/cases/awaiting-center-receipt").then((module) => ({ default: module.CenterReceiptCasesPage }))
 );
 const CaseDetailsPage = lazy(() =>
   import("./pages/cases/show").then((module) => ({ default: module.CaseDetailsPage }))
@@ -135,42 +115,6 @@ const AccountingDeviceCreatePage = lazy(() =>
 );
 const AccountingDeviceEditPage = lazy(() =>
   import("./pages/accounting/devices/edit").then((module) => ({ default: module.AccountingDeviceEditPage }))
-);
-const AccountingPurchasesPage = lazy(() =>
-  import("./pages/accounting/purchases/list").then((module) => ({ default: module.AccountingPurchasesPage }))
-);
-const AccountingPurchaseDetailsPage = lazy(() =>
-  import("./pages/accounting/purchases/show").then((module) => ({ default: module.AccountingPurchaseDetailsPage }))
-);
-const AccountingPurchaseCreatePage = lazy(() =>
-  import("./pages/accounting/purchases/create").then((module) => ({ default: module.AccountingPurchaseCreatePage }))
-);
-const AccountingPurchaseEditPage = lazy(() =>
-  import("./pages/accounting/purchases/edit").then((module) => ({ default: module.AccountingPurchaseEditPage }))
-);
-const AccountingDailyExpensesPage = lazy(() =>
-  import("./pages/accounting/daily-expenses/list").then((module) => ({ default: module.AccountingDailyExpensesPage }))
-);
-const AccountingDailyExpenseDetailsPage = lazy(() =>
-  import("./pages/accounting/daily-expenses/show").then((module) => ({ default: module.AccountingDailyExpenseDetailsPage }))
-);
-const AccountingDailyExpenseCreatePage = lazy(() =>
-  import("./pages/accounting/daily-expenses/create").then((module) => ({ default: module.AccountingDailyExpenseCreatePage }))
-);
-const AccountingDailyExpenseEditPage = lazy(() =>
-  import("./pages/accounting/daily-expenses/edit").then((module) => ({ default: module.AccountingDailyExpenseEditPage }))
-);
-const AccountingDailyCashPage = lazy(() =>
-  import("./pages/accounting/daily-cash/list").then((module) => ({ default: module.AccountingDailyCashPage }))
-);
-const AccountingDailyCashDetailsPage = lazy(() =>
-  import("./pages/accounting/daily-cash/show").then((module) => ({ default: module.AccountingDailyCashDetailsPage }))
-);
-const AccountingDailyCashCreatePage = lazy(() =>
-  import("./pages/accounting/daily-cash/create").then((module) => ({ default: module.AccountingDailyCashCreatePage }))
-);
-const AccountingDailyCashEditPage = lazy(() =>
-  import("./pages/accounting/daily-cash/edit").then((module) => ({ default: module.AccountingDailyCashEditPage }))
 );
 const LoginPage = lazy(() =>
   import("./pages/login").then((module) => ({ default: module.LoginPage }))
@@ -253,15 +197,6 @@ function App() {
                   label: "Cases",
                   icon: <ClipboardList size={16} />,
                   roles: ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager"],
-                },
-              },
-              {
-                name: "center-receipts",
-                list: "/center-receipts",
-                meta: {
-                  label: "Center Receipts",
-                  icon: <ScanSearch size={16} />,
-                  roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
                 },
               },
               {
@@ -360,58 +295,6 @@ function App() {
                   roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
                 },
               },
-              {
-                name: "accounting-branches",
-                list: "/accounting/branches",
-                create: "/accounting/branches/create",
-                show: "/accounting/branches/:id",
-                edit: "/accounting/branches/:id/edit",
-                meta: {
-                  label: "Branches",
-                  icon: <Building2 size={16} />,
-                  parent: "accounting",
-                  roles: ["admin", "receptionist", "maintenance_manager"],
-                },
-              },
-              {
-                name: "accounting-purchases",
-                list: "/accounting/purchases",
-                create: "/accounting/purchases/create",
-                show: "/accounting/purchases/:id",
-                edit: "/accounting/purchases/:id/edit",
-                meta: {
-                  label: "Purchases",
-                  icon: <ShoppingCart size={16} />,
-                  parent: "accounting",
-                  roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
-                },
-              },
-              {
-                name: "accounting-daily-expenses",
-                list: "/accounting/daily-expenses",
-                create: "/accounting/daily-expenses/create",
-                show: "/accounting/daily-expenses/:id",
-                edit: "/accounting/daily-expenses/:id/edit",
-                meta: {
-                  label: "Daily Expenses",
-                  icon: <ReceiptText size={16} />,
-                  parent: "accounting",
-                  roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
-                },
-              },
-              {
-                name: "accounting-daily-cash",
-                list: "/accounting/daily-cash",
-                create: "/accounting/daily-cash/create",
-                show: "/accounting/daily-cash/:id",
-                edit: "/accounting/daily-cash/:id/edit",
-                meta: {
-                  label: "Daily Cash",
-                  icon: <Wallet size={16} />,
-                  parent: "accounting",
-                  roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
-                },
-              },
             ]}
             options={{
               syncWithLocation: true,
@@ -452,7 +335,6 @@ function App() {
                   <Route path="cases" element={<ProtectedAccessRoute resource="cases"><CasesPage /></ProtectedAccessRoute>} />
                   <Route path="cases/create" element={<ProtectedAccessRoute resource="cases" requiredPermissions={["cases.create"]}><CreateCasePage /></ProtectedAccessRoute>} />
                   <Route path="cases/:id" element={<ProtectedAccessRoute resource="cases"><CaseDetailsPage /></ProtectedAccessRoute>} />
-                  <Route path="center-receipts" element={<ProtectedAccessRoute resource="center-receipts"><CenterReceiptCasesPage /></ProtectedAccessRoute>} />
                   <Route
                     path="maintenance-operations"
                     element={<ProtectedAccessRoute resource="maintenance-operations"><MaintenanceOperationsPage /></ProtectedAccessRoute>}
@@ -479,22 +361,6 @@ function App() {
                   <Route path="accounting/devices/create" element={<ProtectedAccessRoute resource="accounting-devices" requiredPermissions={["accounting.devices.manage"]}><AccountingDeviceCreatePage /></ProtectedAccessRoute>} />
                   <Route path="accounting/devices/:id" element={<ProtectedAccessRoute resource="accounting-devices"><AccountingDeviceDetailsPage /></ProtectedAccessRoute>} />
                   <Route path="accounting/devices/:id/edit" element={<ProtectedAccessRoute resource="accounting-devices" requiredPermissions={["accounting.devices.manage"]}><AccountingDeviceEditPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/branches" element={<ProtectedAccessRoute resource="accounting-branches"><BranchesPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/branches/create" element={<ProtectedAccessRoute resource="accounting-branches" requiredPermissions={["branches.manage"]}><BranchCreatePage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/branches/:id" element={<ProtectedAccessRoute resource="accounting-branches"><BranchDetailsPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/branches/:id/edit" element={<ProtectedAccessRoute resource="accounting-branches" requiredPermissions={["branches.manage"]}><BranchEditPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/purchases" element={<ProtectedAccessRoute resource="accounting-purchases"><AccountingPurchasesPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/purchases/create" element={<ProtectedAccessRoute resource="accounting-purchases" requiredPermissions={["accounting.purchases.manage"]}><AccountingPurchaseCreatePage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/purchases/:id" element={<ProtectedAccessRoute resource="accounting-purchases"><AccountingPurchaseDetailsPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/purchases/:id/edit" element={<ProtectedAccessRoute resource="accounting-purchases" requiredPermissions={["accounting.purchases.manage"]}><AccountingPurchaseEditPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/daily-expenses" element={<ProtectedAccessRoute resource="accounting-daily-expenses"><AccountingDailyExpensesPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/daily-expenses/create" element={<ProtectedAccessRoute resource="accounting-daily-expenses" requiredPermissions={["accounting.expenses.manage"]}><AccountingDailyExpenseCreatePage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/daily-expenses/:id" element={<ProtectedAccessRoute resource="accounting-daily-expenses"><AccountingDailyExpenseDetailsPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/daily-expenses/:id/edit" element={<ProtectedAccessRoute resource="accounting-daily-expenses" requiredPermissions={["accounting.expenses.manage"]}><AccountingDailyExpenseEditPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/daily-cash" element={<ProtectedAccessRoute resource="accounting-daily-cash"><AccountingDailyCashPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/daily-cash/create" element={<ProtectedAccessRoute resource="accounting-daily-cash" requiredPermissions={["accounting.daily_cash.manage"]}><AccountingDailyCashCreatePage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/daily-cash/:id" element={<ProtectedAccessRoute resource="accounting-daily-cash"><AccountingDailyCashDetailsPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/daily-cash/:id/edit" element={<ProtectedAccessRoute resource="accounting-daily-cash" requiredPermissions={["accounting.daily_cash.manage"]}><AccountingDailyCashEditPage /></ProtectedAccessRoute>} />
                 </Route>
               </Routes>
             </Suspense>

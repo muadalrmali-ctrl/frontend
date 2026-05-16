@@ -75,13 +75,10 @@ import { getStoredUser } from "@/providers/auth-provider";
 type CaseDetailsResponse = {
   caseData: CaseData;
   customer: Customer | null;
-  branch: Branch | null;
   device: Device | null;
   history: CaseHistory[];
   waitingPartInventoryItem: InventoryItem | null;
   createdByUser: UserSummary | null;
-  branchCreatedByUser?: UserSummary | null;
-  centerReceivedByUser?: UserSummary | null;
   assignedTechnician: UserSummary | null;
 };
 
@@ -89,10 +86,6 @@ type CaseData = {
   id: number;
   caseCode: string;
   caseType?: string | null;
-  sourceType?: string | null;
-  branchId?: number | null;
-  branchCreatedBy?: number | null;
-  branchNotes?: string | null;
   status: string;
   customerComplaint: string;
   priority: string;
@@ -133,9 +126,6 @@ type CaseData = {
   readyNotificationMessage?: string | null;
   readyNotificationChannel?: string | null;
   readyNotificationSentAt?: string | null;
-  centerReceivedAt?: string | null;
-  centerReceivedBy?: number | null;
-  centerReceiptNotes?: string | null;
   customerReceivedAt?: string | null;
   operationFinalizedAt?: string | null;
   assignedTechnicianId?: number | null;
@@ -144,7 +134,6 @@ type CaseData = {
 };
 
 type Customer = { id: number; name: string; phone: string; address?: string | null };
-type Branch = { id: number; name: string; code: string; city: string; phone?: string | null; status: string };
 type Device = { id: number; applianceType: string; brand: string; modelName: string; modelCode?: string | null; notes?: string | null };
 type UserSummary = { id: number; name: string; email: string };
 type CaseHistory = { id: number; toStatus: string; notes?: string | null; createdAt?: string | null; actorName?: string | null; actorRole?: string | null };
@@ -176,7 +165,6 @@ type ReadyMediaOption = {
 };
 
 const statusLabels: Record<string, string> = {
-  awaiting_center_receipt: "بانتظار الاستلام في المركز",
   received: "حالة جديدة",
   waiting_part: "بانتظار القطعة",
   diagnosing: "قيد التشخيص",
@@ -464,9 +452,6 @@ export function CaseDetailsPage() {
       {details && (
         <>
           <BasicCaseInfo details={details} />
-          {(details.caseData.sourceType === "branch" || details.caseData.status === "awaiting_center_receipt") ? (
-            <BranchWorkflowSection details={details} onSaved={loadDetails} />
-          ) : null}
           {status === "waiting_part" && <WaitingPartSection details={details} onSaved={loadDetails} />}
           {status === "diagnosing" && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "waiting_approval" && <WaitingApprovalAndHandoffSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
@@ -519,138 +504,6 @@ function BasicCaseInfo({ details }: { details: CaseDetailsResponse }) {
         </Card>
       </div>
     </div>
-  );
-}
-
-function BranchWorkflowSection({ details, onSaved }: { details: CaseDetailsResponse; onSaved: () => Promise<void> }) {
-  const currentUser = getStoredUser();
-  const canConfirmCenterReceipt = hasPermission(currentUser, "cases.awaiting_center_receipt.receive");
-  const [attachments, setAttachments] = useState<CaseAttachment[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
-  const [centerReceiptNotes, setCenterReceiptNotes] = useState(details.caseData.centerReceiptNotes || "");
-  const { open } = useNotification();
-
-  const loadAttachments = async () => {
-    const media = await apiClient<RawCaseAttachment[]>(`/api/media/case/${details.caseData.id}`);
-    setAttachments(normalizeCaseAttachments(media));
-  };
-
-  useEffect(() => {
-    loadAttachments().catch((loadError) => {
-      setError(loadError instanceof Error ? loadError.message : "تعذر تحميل مرفقات الحالة.");
-    });
-  }, [details.caseData.id]);
-
-  const branchHandoffAttachments = attachments.filter((attachment) => attachment.category === "branch_handoff");
-  const centerReceiptAttachments = attachments.filter((attachment) => attachment.category === "center_receipt");
-
-  const uploadCenterReceiptImages = async (files: File[]) => {
-    setError(null);
-    setIsUploading(true);
-
-    try {
-      for (const file of files) {
-        await uploadCaseImageFile({
-          caseId: details.caseData.id,
-          mediaCategory: "center_receipt",
-          file,
-        });
-      }
-      await loadAttachments();
-    } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "تعذر رفع صور الاستلام في المركز.");
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const confirmCenterReceipt = async () => {
-    setError(null);
-    setIsConfirming(true);
-
-    try {
-      await apiClient(`/api/cases/${details.caseData.id}/center-receipt`, {
-        method: "PATCH",
-        body: {
-          notes: centerReceiptNotes || undefined,
-        },
-      });
-      open?.({ type: "success", message: "تم الاستلام في المركز", description: "انتقلت الحالة الآن إلى بداية دورة الصيانة العادية." });
-      await onSaved();
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "تعذر تأكيد الاستلام في المركز.");
-    } finally {
-      setIsConfirming(false);
-    }
-  };
-
-  return (
-    <Card className="rounded-lg border-primary/20">
-      <CardHeader><CardTitle>بيانات الفرع والاستلام في المركز</CardTitle></CardHeader>
-      <CardContent className="grid gap-5">
-        {error ? <ErrorMessage message={error} /> : null}
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Info label="مصدر الحالة" value={details.caseData.sourceType === "branch" ? "فرع / مركز بيع" : "المركز الرئيسي"} />
-          <Info label="اسم الفرع" value={details.branch?.name || "-"} />
-          <Info label="كود الفرع" value={details.branch?.code || "-"} />
-          <Info label="حالة الاستلام في المركز" value={details.caseData.centerReceivedAt ? "تم الاستلام في المركز" : "بانتظار الاستلام"} />
-          <Info label="أنشأها من الفرع" value={details.branchCreatedByUser?.name || "-"} />
-          <Info label="وقت الاستلام في المركز" value={formatDate(details.caseData.centerReceivedAt)} />
-          <Info label="تم الاستلام بواسطة" value={details.centerReceivedByUser?.name || "-"} />
-          <Info label="الفرع / المدينة" value={details.branch?.city || "-"} />
-        </div>
-        <Info label="ملاحظات الفرع" value={details.caseData.branchNotes || "-"} />
-        <Info label="ملاحظات الاستلام في المركز" value={details.caseData.centerReceiptNotes || "-"} />
-
-        <div className="grid gap-4 xl:grid-cols-2">
-          <div className="space-y-3">
-            <h3 className="font-semibold">مرفقات إرسال الفرع</h3>
-            <AttachmentGallery
-              attachments={branchHandoffAttachments}
-              emptyMessage="لا توجد صور أو فيديوهات مرفوعة من الفرع حتى الآن."
-              className="grid gap-3 sm:grid-cols-2"
-            />
-          </div>
-          <div className="space-y-3">
-            <h3 className="font-semibold">مرفقات الاستلام في المركز</h3>
-            <AttachmentGallery
-              attachments={centerReceiptAttachments}
-              emptyMessage="لا توجد صور استلام مضافة من المركز."
-              className="grid gap-3 sm:grid-cols-2"
-            />
-          </div>
-        </div>
-
-        {canConfirmCenterReceipt ? (
-          <div className="grid gap-4 rounded-lg border p-4">
-            <CaseAttachmentUploader
-              title="صور الاستلام في المركز"
-              description="يمكن رفع صور عند استلام الجهاز فعليًا في المركز الرئيسي."
-              type="image"
-              accept="image/*"
-              attachments={centerReceiptAttachments.filter((attachment) => attachment.type === "image")}
-              uploading={isUploading}
-              disabled={isConfirming}
-              maxItems={6}
-              uploadLabel="رفع صور الاستلام"
-              onUpload={uploadCenterReceiptImages}
-            />
-            <Field label="ملاحظات الاستلام في المركز">
-              <Textarea value={centerReceiptNotes} onChange={(event) => setCenterReceiptNotes(event.target.value)} className="min-h-24" />
-            </Field>
-            {details.caseData.status === "awaiting_center_receipt" ? (
-              <div className="flex justify-end">
-                <Button type="button" onClick={confirmCenterReceipt} disabled={isConfirming}>
-                  {isConfirming ? "جارٍ تأكيد الاستلام..." : "تم الاستلام في المركز"}
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
   );
 }
 

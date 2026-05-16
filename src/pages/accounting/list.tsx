@@ -1,15 +1,6 @@
 import { Link } from "react-router";
 import type { ReactNode } from "react";
-import {
-  Building2,
-  Cpu,
-  ReceiptText,
-  ShoppingCart,
-  Truck,
-  UserRound,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { Cpu, Truck, UserRound, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { hasPermission } from "@/lib/access-control";
@@ -21,18 +12,13 @@ export function AccountingPage() {
   const canViewTeam = hasPermission(currentUser, "accounting.team.view");
   const canViewSuppliers = hasPermission(currentUser, "accounting.suppliers.view");
   const canViewDevices = hasPermission(currentUser, "accounting.devices.view");
-  const canViewBranches = hasPermission(currentUser, "branches.view");
-  const canViewPurchases = hasPermission(currentUser, "accounting.purchases.view");
-  const canViewExpenses = hasPermission(currentUser, "accounting.expenses.view");
-  const canViewDailyCash = hasPermission(currentUser, "accounting.daily_cash.view");
 
   return (
     <section className="space-y-6" dir="rtl">
       <div>
         <h1 className="text-3xl font-semibold">المحاسبة</h1>
         <p className="text-muted-foreground">
-          إدارة العملاء والفريق والموردين والأجهزة والفروع وسجل المشتريات والمصاريف
-          واليومية النقدية من مكان واحد.
+          إدارة العملاء والفريق والموردين والأجهزة المرتبطة بسير عمل الصيانة.
         </p>
       </div>
 
@@ -61,7 +47,7 @@ export function AccountingPage() {
           <AccountingSectionCard
             icon={<Truck className="size-5" />}
             title="الموردون"
-            description="إدارة الموردين وربطهم بالمشتريات والفواتير."
+            description="إدارة الموردين وبيانات التواصل الخاصة بهم."
             to="/accounting/suppliers"
             actionLabel="فتح الموردين"
           />
@@ -74,46 +60,6 @@ export function AccountingPage() {
             description="مرجع الأجهزة والموديلات المسجلة داخل النظام."
             to="/accounting/devices"
             actionLabel="فتح الأجهزة"
-          />
-        ) : null}
-
-        {canViewBranches ? (
-          <AccountingSectionCard
-            icon={<Building2 className="size-5" />}
-            title="الفروع"
-            description="إدارة الفروع ومتابعة الحالات القادمة من كل فرع."
-            to="/accounting/branches"
-            actionLabel="فتح الفروع"
-          />
-        ) : null}
-
-        {canViewPurchases ? (
-          <AccountingSectionCard
-            icon={<ShoppingCart className="size-5" />}
-            title="المشتريات"
-            description="سجل مشتريات الموردين وتأكيد إدخال العناصر إلى المخزون."
-            to="/accounting/purchases"
-            actionLabel="فتح المشتريات"
-          />
-        ) : null}
-
-        {canViewExpenses ? (
-          <AccountingSectionCard
-            icon={<ReceiptText className="size-5" />}
-            title="المصاريف اليومية"
-            description="المصاريف التشغيلية اليومية والإيصالات المرتبطة بها."
-            to="/accounting/daily-expenses"
-            actionLabel="فتح المصاريف"
-          />
-        ) : null}
-
-        {canViewDailyCash ? (
-          <AccountingSectionCard
-            icon={<Wallet className="size-5" />}
-            title="اليومية النقدية"
-            description="التحصيل اليومي قبل تسليمه إلى الخزينة أو الإدارة."
-            to="/accounting/daily-cash"
-            actionLabel="فتح اليومية النقدية"
           />
         ) : null}
       </div>

@@ -459,13 +459,13 @@ export function CaseDetailsPage() {
       {details && (
         <>
           <BasicCaseInfo details={details} />
-          <IntakeMediaSection caseId={details.caseData.id} />
           {status === "waiting_part" && <WaitingPartSection details={details} onSaved={loadDetails} />}
           {status === "diagnosing" && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "waiting_approval" && <WaitingApprovalAndHandoffSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "in_progress" && <ExecutionSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "repaired" && <RepairedSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "not_repairable" && <NotRepairableSection details={details} onSaved={loadDetails} />}
+          <IntakeMediaSection caseId={details.caseData.id} />
           <CaseActivityTimeline history={details.history} />
         </>
       )}
@@ -781,38 +781,29 @@ function IntakeMediaSection({ caseId }: { caseId: number }) {
 function BasicCaseInfo({ details }: { details: CaseDetailsResponse }) {
   const latestHistory = details.history[details.history.length - 1];
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      <Card className="rounded-lg">
-        <CardHeader className="px-4 py-3"><CardTitle className="text-lg">المعلومات الأساسية</CardTitle></CardHeader>
-        <CardContent className="grid gap-2 px-4 pb-4">
-          <CompactInfo label="الأولوية" value={details.caseData.priority || "متوسطة"} />
-          <CompactInfo label="نوع الحالة" value={getCaseTypeLabel(details.caseData.caseType)} />
+    <Card className="rounded-lg">
+      <CardContent className="grid gap-4 p-4 lg:grid-cols-3">
+        <CompactInfoGroup title="المعلومات الأساسية">
           <CompactInfo label="تاريخ الإنشاء" value={formatDate(details.caseData.createdAt)} />
-          <CompactInfo label="رقم الحالة" value={details.caseData.caseCode} />
           <CompactInfo label="أنشأها" value={details.createdByUser?.name || "غير محدد"} />
           <CompactInfo label="آخر رسالة" value={details.caseData.latestMessage || latestHistory?.notes || "لا توجد رسالة"} />
           <CompactInfo label="وصف العطل" value={details.caseData.customerComplaint} />
-        </CardContent>
-      </Card>
-      <Card className="rounded-lg">
-        <CardHeader className="px-4 py-3"><CardTitle className="text-lg">بيانات العميل</CardTitle></CardHeader>
-        <CardContent className="grid gap-2 px-4 pb-4">
+        </CompactInfoGroup>
+
+        <CompactInfoGroup title="بيانات العميل">
           <CompactInfo label="الاسم" value={details.customer?.name || "غير محدد"} />
           <CompactInfo label="الهاتف" value={details.customer?.phone || "غير محدد"} />
           <CompactInfo label="العنوان" value={details.customer?.address || "غير محدد"} />
-        </CardContent>
-      </Card>
-      <Card className="rounded-lg">
-        <CardHeader className="px-4 py-3"><CardTitle className="text-lg">بيانات الجهاز</CardTitle></CardHeader>
-        <CardContent className="grid gap-2 px-4 pb-4">
+        </CompactInfoGroup>
+
+        <CompactInfoGroup title="بيانات الجهاز">
           <CompactInfo label="نوع الجهاز" value={details.device?.applianceType || "غير محدد"} />
           <CompactInfo label="الماركة" value={details.device?.brand || "غير محدد"} />
           <CompactInfo label="الموديل" value={details.device?.modelName || "غير محدد"} />
           <CompactInfo label="الكود" value={details.device?.modelCode || "غير محدد"} />
-          <CompactInfo label="الرقم التسلسلي" value={details.caseData.serialNumber || "غير متوفر"} />
-        </CardContent>
-      </Card>
-    </div>
+        </CompactInfoGroup>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -990,6 +981,7 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
   const [messageText, setMessageText] = useState("");
   const [isMessageDirty, setIsMessageDirty] = useState(false);
   const [isSendingDiagnosis, setIsSendingDiagnosis] = useState(false);
+  const [isPreparingExecution, setIsPreparingExecution] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { invoiceTotal } = getInvoiceTotals(parts, services);
   const selectedPart = inventoryItems.find((item) => String(item.id) === selectedPartId);
@@ -1151,6 +1143,49 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
       setIsSendingDiagnosis(false);
     }
   };
+  const prepareForExecution = async () => {
+    const normalizedDiagnosis = diagnosisText.trim();
+
+    if (!normalizedDiagnosis) {
+      setError("يرجى إدخال التشخيص قبل تجهيز الحالة للتنفيذ.");
+      return;
+    }
+
+    setError(null);
+    setIsPreparingExecution(true);
+
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}`, {
+        method: "PATCH",
+        body: {
+          diagnosisNote: normalizedDiagnosis,
+          faultCause: normalizedDiagnosis,
+          deliveryDueAt: expectedDeliveryAt,
+        },
+      });
+
+      if (details.caseData.status !== "waiting_approval") {
+        await apiClient(`/api/cases/${details.caseData.id}/status`, {
+          method: "PATCH",
+          body: {
+            toStatus: "waiting_approval",
+            notes: "تم تجهيز الحالة للتنفيذ بدون إرسال رسالة للعميل",
+          },
+        });
+      }
+
+      open?.({
+        type: "success",
+        message: "تم تجهيز الحالة للتنفيذ",
+        description: "تم نقل الحالة إلى بانتظار الموافقة بدون إرسال رسالة للعميل.",
+      });
+      await onSaved();
+    } catch (prepareError) {
+      setError(prepareError instanceof Error ? prepareError.message : "تعذر تجهيز الحالة للتنفيذ");
+    } finally {
+      setIsPreparingExecution(false);
+    }
+  };
 
   return (
     <Card className="rounded-lg">
@@ -1196,6 +1231,12 @@ function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { detail
               <Button type="button" className="w-fit" onClick={() => setIsDiagnosisDialogOpen(true)}>
                 <Send />
                 Send Diagnosis
+              </Button>
+            ) : null}
+            {canEditDiagnosis ? (
+              <Button type="button" variant="outline" className="w-fit" onClick={prepareForExecution} disabled={isPreparingExecution || isSendingDiagnosis}>
+                <CheckCircle2 />
+                {isPreparingExecution ? "جارٍ التجهيز..." : "تجهيز للتنفيذ"}
               </Button>
             ) : null}
             {canPreviewInvoice ? (
@@ -2968,9 +3009,18 @@ function Info({ label, value }: { label: string; value: string }) {
 
 function CompactInfo({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border bg-muted/10 px-3 py-2">
+    <div className="rounded-md border bg-muted/10 px-2.5 py-2">
       <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
       <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6 text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function CompactInfoGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="grid content-start gap-2">
+      <h2 className="text-base font-bold text-foreground">{title}</h2>
+      <div className="grid gap-2">{children}</div>
     </div>
   );
 }

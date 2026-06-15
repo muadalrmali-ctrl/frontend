@@ -452,6 +452,7 @@ export function CaseDetailsPage() {
       {details && (
         <>
           <BasicCaseInfo details={details} />
+          <IntakeMediaSection caseId={details.caseData.id} />
           {status === "waiting_part" && <WaitingPartSection details={details} onSaved={loadDetails} />}
           {status === "diagnosing" && <DiagnosisInvoiceSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
           {status === "waiting_approval" && <WaitingApprovalAndHandoffSection details={details} parts={parts} services={services} onSaved={loadDetails} />}
@@ -462,6 +463,49 @@ export function CaseDetailsPage() {
         </>
       )}
     </section>
+  );
+}
+
+function IntakeMediaSection({ caseId }: { caseId: number }) {
+  const [attachments, setAttachments] = useState<CaseAttachment[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    apiClient<RawCaseAttachment[]>(`/api/media/case/${caseId}`)
+      .then((media) => {
+        if (!isMounted) return;
+        setAttachments(normalizeCaseAttachments(media));
+      })
+      .catch((loadError) => {
+        if (!isMounted) return;
+        setError(loadError instanceof Error ? loadError.message : "تعذر تحميل مرفقات الاستلام.");
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [caseId]);
+
+  const intakeImages = filterAttachments(attachments, { type: "image", category: "case_intake" });
+  const intakeVideos = filterAttachments(attachments, { type: "video", category: "case_intake" });
+  const intakeAttachments = [...intakeImages, ...intakeVideos];
+
+  return (
+    <Card className="rounded-lg">
+      <CardHeader>
+        <CardTitle>مرفقات الاستلام</CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        {error ? <ErrorMessage message={error} /> : null}
+        <AttachmentGallery
+          attachments={intakeAttachments}
+          emptyMessage="لا توجد صور أو فيديوهات استلام محفوظة لهذه الحالة."
+          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        />
+      </CardContent>
+    </Card>
   );
 }
 

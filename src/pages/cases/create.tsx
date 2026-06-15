@@ -1,6 +1,6 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { useCreate, useList } from "@refinedev/core";
+import { useCreate, useList, useNotification } from "@refinedev/core";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Check, ChevronsUpDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,21 +12,24 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  MAX_CASE_IMAGE_FILE_BYTES,
+  MAX_CASE_VIDEO_FILE_BYTES,
+  uploadCaseImageFile,
+  uploadCaseVideoFile,
+} from "@/lib/case-media-upload";
+import { ApiError } from "@/providers/api-client";
 import { cn } from "@/lib/utils";
 
-type Priority = "منخفضة" | "متوسطة" | "مرتفعة" | "عاجلة";
 type Customer = { id: number; name: string; phone: string; address?: string | null };
 type Device = { id: number; applianceType: string; brand: string; modelName: string; modelCode?: string | null };
-type Technician = { id: number; name: string; email: string; role: string };
+type CreatedCase = { id: number };
 
 type CreateCaseValues = {
   caseType: "internal" | "external";
   selectedCustomerId: number | null;
   selectedDeviceId: number | null;
-  selectedTechnicianId: number | null;
   customerComplaint: string;
-  serialNumber: string;
-  priority: Priority;
 };
 
 type NewCustomerValues = { name: string; phone: string; address: string };
@@ -36,35 +39,66 @@ const initialValues: CreateCaseValues = {
   caseType: "internal",
   selectedCustomerId: null,
   selectedDeviceId: null,
-  selectedTechnicianId: null,
   customerComplaint: "",
-  serialNumber: "",
-  priority: "متوسطة",
 };
 
 const initialCustomerValues: NewCustomerValues = { name: "", phone: "", address: "" };
 const initialDeviceValues: NewDeviceValues = { applianceType: "", brand: "", modelName: "", modelCode: "" };
 
+const getRequestErrorMessage = (error: unknown, fallback: string) => {
+  if (error instanceof ApiError && error.data && typeof error.data === "object") {
+    const payload = error.data as {
+      message?: string;
+      error?: string;
+      errors?: Array<{ message?: string; path?: Array<string | number> }>;
+    };
+    const issues = Array.isArray(payload.errors)
+      ? payload.errors
+          .map((issue) => {
+            const path = issue.path?.length ? `${issue.path.join(".")}: ` : "";
+            return `${path}${issue.message || ""}`.trim();
+          })
+          .filter(Boolean)
+      : [];
+
+    if (issues.length > 0) {
+      return `${payload.message || error.message}: ${issues.join("، ")}`;
+    }
+
+    if (payload.error) {
+      return `${payload.message || error.message}: ${payload.error}`;
+    }
+  }
+
+  return error instanceof Error ? error.message : fallback;
+};
+
 export function CreateCasePage() {
   const navigate = useNavigate();
+  const { open } = useNotification();
   const { mutateAsync: createCase, mutation: caseMutation } = useCreate();
   const { mutateAsync: createRecord, mutation: recordMutation } = useCreate();
   const customersQuery = useList<Customer>({ resource: "customers" });
   const devicesQuery = useList<Device>({ resource: "devices" });
-  const techniciansQuery = useList<Technician>({ resource: "technicians" });
   const [values, setValues] = useState<CreateCaseValues>(initialValues);
   const [newCustomer, setNewCustomer] = useState<NewCustomerValues>(initialCustomerValues);
   const [newDevice, setNewDevice] = useState<NewDeviceValues>(initialDeviceValues);
+  const [intakeImages, setIntakeImages] = useState<File[]>([]);
+  const [intakeVideos, setIntakeVideos] = useState<File[]>([]);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [isDeviceDialogOpen, setIsDeviceDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const customers = customersQuery.result.data ?? [];
   const devices = devicesQuery.result.data ?? [];
-  const technicians = techniciansQuery.result.data ?? [];
-  const selectedTechnician = useMemo(
-    () => technicians.find((technician) => technician.id === values.selectedTechnicianId),
-    [technicians, values.selectedTechnicianId]
+  const selectedCustomer = useMemo(
+    () => customers.find((customer) => customer.id === values.selectedCustomerId),
+    [customers, values.selectedCustomerId]
+  );
+  const selectedDevice = useMemo(
+    () => devices.find((device) => device.id === values.selectedDeviceId),
+    [devices, values.selectedDeviceId]
   );
 
   const setField = <TKey extends keyof CreateCaseValues>(key: TKey, value: CreateCaseValues[TKey]) =>
@@ -115,6 +149,70 @@ export function CreateCasePage() {
     }
   };
 
+  const validateMediaFiles = (files: File[], type: "image" | "video") => {
+    const maxSize = type === "image" ? MAX_CASE_IMAGE_FILE_BYTES : MAX_CASE_VIDEO_FILE_BYTES;
+    const label = type === "image" ? "الصورة" : "الفيديو";
+
+    for (const file of files) {
+      if (!file.type.startsWith(`${type}/`)) {
+        throw new Error(type === "image" ? "يرجى اختيار ملفات صور فقط." : "يرجى اختيار ملفات فيديو فقط.");
+      }
+
+      if (file.size > maxSize) {
+        const maxMegabytes = Math.floor(maxSize / (1024 * 1024));
+        throw new Error(`${label} ${file.name} أكبر من الحد المسموح (${maxMegabytes} ميجابايت).`);
+      }
+    }
+  };
+
+  const handleIntakeImagesChange = (files: File[]) => {
+    try {
+      validateMediaFiles(files, "image");
+      setError(null);
+      setIntakeImages(files);
+    } catch (validationError) {
+      setError(validationError instanceof Error ? validationError.message : "تعذر اختيار الصور.");
+    }
+  };
+
+  const handleIntakeVideosChange = (files: File[]) => {
+    try {
+      validateMediaFiles(files, "video");
+      setError(null);
+      setIntakeVideos(files);
+    } catch (validationError) {
+      setError(validationError instanceof Error ? validationError.message : "تعذر اختيار الفيديوهات.");
+    }
+  };
+
+  const uploadIntakeMedia = async (caseId: number) => {
+    const uploads = [
+      ...intakeImages.map((file) =>
+        uploadCaseImageFile({
+          caseId,
+          mediaCategory: "case_intake",
+          file,
+        })
+      ),
+      ...intakeVideos.map((file) =>
+        uploadCaseVideoFile({
+          caseId,
+          mediaCategory: "case_intake",
+          file,
+        })
+      ),
+    ];
+
+    if (uploads.length === 0) return;
+
+    setIsUploadingMedia(true);
+    try {
+      await Promise.all(uploads);
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -129,29 +227,46 @@ export function CreateCasePage() {
       return;
     }
 
-    if (!values.selectedTechnicianId || !selectedTechnician) {
-      setError("اختر الفني المسؤول من القائمة.");
+    if (!values.customerComplaint.trim()) {
+      setError("أدخل وصف العطل قبل إنشاء الحالة.");
       return;
     }
 
+    let createdCaseId: number | null = null;
+
     try {
-      await createCase({
+      const created = (await createCase({
         resource: "cases",
         values: {
           customerId: values.selectedCustomerId,
           deviceId: values.selectedDeviceId,
           caseType: values.caseType,
-          assignedTechnicianId: values.selectedTechnicianId,
-          technicianName: selectedTechnician.name,
-          customerComplaint: values.customerComplaint,
-          serialNumber: values.serialNumber || undefined,
-          priority: values.priority,
+          customerComplaint: values.customerComplaint.trim(),
         },
-      });
+      })) as { data: CreatedCase };
 
-      navigate("/cases");
+      createdCaseId = created.data.id;
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Failed to create case");
+      setError(getRequestErrorMessage(requestError, "Failed to create case"));
+      return;
+    }
+
+    try {
+      await uploadIntakeMedia(createdCaseId);
+
+      open?.({
+        type: "success",
+        message: "تم إنشاء الحالة بنجاح",
+      });
+      navigate("/cases");
+    } catch (uploadError) {
+      const message = getRequestErrorMessage(uploadError, "تعذر رفع مرفقات الاستلام.");
+      open?.({
+        type: "error",
+        message: "تم إنشاء الحالة لكن تعذر رفع مرفقات الاستلام",
+        description: message,
+      });
+      navigate(`/cases/${createdCaseId}`);
     }
   };
 
@@ -162,13 +277,13 @@ export function CreateCasePage() {
           <div>
             <h1 className="text-3xl font-semibold">إنشاء حالة جديدة</h1>
             <p className="text-muted-foreground">
-              اختر العميل والجهاز والفني ثم أدخل وصف المشكلة لفتح حالة صيانة.
+              اختر العميل والجهاز ثم أدخل وصف العطل لفتح حالة صيانة.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="submit" disabled={caseMutation.isPending}>
+            <Button type="submit" disabled={caseMutation.isPending || isUploadingMedia}>
               <Check />
-              {caseMutation.isPending ? "جارٍ الإنشاء..." : "إنشاء حالة"}
+              {caseMutation.isPending || isUploadingMedia ? "جارٍ الإنشاء..." : "إنشاء حالة"}
             </Button>
             <Button type="button" variant="outline" onClick={() => navigate("/cases")}>
               <ArrowLeft />
@@ -193,7 +308,7 @@ export function CreateCasePage() {
               <SearchableSelect
                 emptyText="لا يوجد عملاء"
                 placeholder="ابحث بالاسم أو الهاتف"
-                selectedLabel={customers.find((customer) => customer.id === values.selectedCustomerId)?.name}
+                selectedLabel={selectedCustomer?.name}
                 items={customers}
                 getKey={(customer) => customer.id}
                 getValue={(customer) => `${customer.name} ${customer.phone} ${customer.address ?? ""}`}
@@ -221,7 +336,7 @@ export function CreateCasePage() {
               <SearchableSelect
                 emptyText="لا توجد أجهزة"
                 placeholder="ابحث بنوع الجهاز أو الموديل"
-                selectedLabel={devices.find((device) => device.id === values.selectedDeviceId) ? getDeviceLabel(devices.find((device) => device.id === values.selectedDeviceId) as Device) : undefined}
+                selectedLabel={selectedDevice ? getDeviceLabel(selectedDevice) : undefined}
                 items={devices}
                 getKey={(device) => device.id}
                 getValue={(device) => `${device.applianceType} ${device.brand} ${device.modelName} ${device.modelCode ?? ""}`}
@@ -234,57 +349,38 @@ export function CreateCasePage() {
                 onSelect={(device) => setField("selectedDeviceId", device.id)}
               />
             </Field>
-            <Field label="الرقم التسلسلي" htmlFor="serialNumber">
-              <Input id="serialNumber" value={values.serialNumber} onChange={(event) => setField("serialNumber", event.target.value)} />
-            </Field>
           </FormSection>
 
           <FormSection title="وصف الحالة">
             <Field label="وصف العطل" htmlFor="customerComplaint">
               <Textarea id="customerComplaint" className="min-h-32" value={values.customerComplaint} onChange={(event) => setField("customerComplaint", event.target.value)} required />
             </Field>
-          </FormSection>
-
-          <FormSection title="التعيين والأولوية">
             <Field label="نوع الحالة">
               <Select value={values.caseType} onValueChange={(value) => setField("caseType", value as CreateCaseValues["caseType"])}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="internal">داخلي داخل المركز</SelectItem>
-                  <SelectItem value="external">خارجي / موقع العميل</SelectItem>
+                  <SelectItem value="internal">داخلي</SelectItem>
+                  <SelectItem value="external">خارجي</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
+          </FormSection>
 
-            <Field label="الفني المسؤول">
-              <SearchableSelect
-                emptyText="لا يوجد فنيون"
-                placeholder="ابحث عن فني"
-                selectedLabel={selectedTechnician?.name}
-                items={technicians}
-                getKey={(technician) => technician.id}
-                getValue={(technician) => `${technician.name} ${technician.email} ${technician.role}`}
-                renderItem={(technician) => (
-                  <div className="text-right">
-                    <p className="font-medium">{technician.name}</p>
-                    <p className="text-xs text-muted-foreground">{technician.email}</p>
-                  </div>
-                )}
-                onSelect={(technician) => setField("selectedTechnicianId", technician.id)}
-              />
-            </Field>
-
-            <Field label="الأولوية">
-              <Select value={values.priority} onValueChange={(value) => setField("priority", value as Priority)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="منخفضة">منخفضة</SelectItem>
-                  <SelectItem value="متوسطة">متوسطة</SelectItem>
-                  <SelectItem value="مرتفعة">مرتفعة</SelectItem>
-                  <SelectItem value="عاجلة">عاجلة</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
+          <FormSection title="مرفقات الاستلام">
+            <MediaPicker
+              label="صور الاستلام"
+              description="صور توثق حالة الجهاز عند الاستلام. الحد الأقصى 5 ميجابايت للصورة."
+              accept="image/*"
+              files={intakeImages}
+              onChange={handleIntakeImagesChange}
+            />
+            <MediaPicker
+              label="فيديو الاستلام"
+              description="فيديوهات توثق حالة الجهاز عند الاستلام. الحد الأقصى 25 ميجابايت للفيديو."
+              accept="video/*"
+              files={intakeVideos}
+              onChange={handleIntakeVideosChange}
+            />
           </FormSection>
         </div>
       </form>
@@ -415,6 +511,66 @@ function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; 
     <div className="grid gap-2">
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function MediaPicker({
+  label,
+  description,
+  accept,
+  files,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  accept: string;
+  files: File[];
+  onChange: (files: File[]) => void;
+}) {
+  const previews = useMemo(
+    () =>
+      files.map((file) => ({
+        file,
+        url: URL.createObjectURL(file),
+      })),
+    [files]
+  );
+
+  useEffect(() => {
+    return () => {
+      previews.forEach((preview) => URL.revokeObjectURL(preview.url));
+    };
+  }, [previews]);
+
+  return (
+    <div className="grid gap-3 rounded-lg border p-4">
+      <div className="grid gap-1">
+        <Label>{label}</Label>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      <Input type="file" accept={accept} multiple onChange={(event) => onChange(Array.from(event.target.files ?? []))} />
+      {files.length > 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {previews.map(({ file, url }) => (
+            <div key={`${file.name}-${file.size}`} className="grid gap-2 rounded-lg border p-3">
+              {file.type.startsWith("image/") ? (
+                <div className="aspect-[4/3] overflow-hidden rounded-lg border bg-muted/30">
+                  <img src={url} alt={file.name} className="h-full w-full object-cover" />
+                </div>
+              ) : null}
+              {file.type.startsWith("video/") ? (
+                <div className="overflow-hidden rounded-lg border bg-black">
+                  <video src={url} controls className="aspect-video w-full object-contain" />
+                </div>
+              ) : null}
+              <span className="truncate text-sm text-muted-foreground">{file.name}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">لا توجد مرفقات مختارة بعد.</p>
+      )}
     </div>
   );
 }

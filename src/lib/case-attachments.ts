@@ -5,6 +5,7 @@ export type CaseAttachmentCategory =
   | "not_repairable"
   | "product_image"
   | "damaged_part_image"
+  | "case_intake"
   | "general"
   | "waiting_part";
 
@@ -58,6 +59,7 @@ const normalizeCategory = (value?: string | null): CaseAttachmentCategory => {
     case "not_repairable":
     case "product_image":
     case "damaged_part_image":
+    case "case_intake":
     case "general":
     case "waiting_part":
       return value;

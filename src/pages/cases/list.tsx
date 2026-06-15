@@ -2,7 +2,7 @@ import { DragEvent, useMemo, useState } from "react";
 import { useList, useUpdate } from "@refinedev/core";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Link } from "react-router";
-import { CasePriorityBadge, CaseTypeBadge } from "@/components/cases/case-badges";
+import { CaseTypeBadge } from "@/components/cases/case-badges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CASE_COLUMN_PERMISSION_MAP, hasPermission } from "@/lib/access-control";
@@ -15,7 +15,6 @@ type CaseRecord = {
   caseType?: string | null;
   status: string;
   customerComplaint: string;
-  priority?: string | null;
   technicianName?: string | null;
   customerName?: string | null;
   deviceApplianceType?: string | null;
@@ -117,7 +116,7 @@ const getDeviceName = (caseItem: CaseRecord) =>
 export function CasesPage() {
   const currentUser = getStoredUser();
   const canCreateCase = hasPermission(currentUser, "cases.create");
-  const [collapsedColumns, setCollapsedColumns] = useState<string[]>([]);
+  const [columnCollapseOverrides, setColumnCollapseOverrides] = useState<Record<string, boolean>>({});
   const [draggedCase, setDraggedCase] = useState<CaseRecord | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
   const { mutateAsync: updateStatus, mutation } = useUpdate();
@@ -135,7 +134,14 @@ export function CasesPage() {
   }, [cases, currentUser]);
 
   const toggleColumn = (key: string) => {
-    setCollapsedColumns((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
+    const column = groupedCases.find((item) => item.key === key);
+    const autoCollapsed = (column?.cases.length ?? 0) === 0;
+    const currentCollapsed = columnCollapseOverrides[key] ?? autoCollapsed;
+
+    setColumnCollapseOverrides((current) => ({
+      ...current,
+      [key]: !currentCollapsed,
+    }));
   };
 
   const moveCase = async (caseItem: CaseRecord, toStatus: string) => {
@@ -214,7 +220,7 @@ export function CasesPage() {
                     key={column.key}
                     column={column}
                     draggedCase={draggedCase}
-                    isCollapsed={collapsedColumns.includes(column.key)}
+                    isCollapsed={columnCollapseOverrides[column.key] ?? column.cases.length === 0}
                     onToggle={() => toggleColumn(column.key)}
                     onDragStart={(caseItem) => setDraggedCase(caseItem)}
                     onDragEnd={() => setDraggedCase(null)}
@@ -339,7 +345,6 @@ function CaseCard({
           <h3 className="truncate text-[1.03rem] font-extrabold text-foreground">{caseItem.customerName ?? "عميل غير محدد"}</h3>
         </div>
         <div className="flex flex-col items-end gap-1.5">
-          <CasePriorityBadge priority={caseItem.priority} />
           <CaseTypeBadge caseType={caseItem.caseType} />
         </div>
       </div>

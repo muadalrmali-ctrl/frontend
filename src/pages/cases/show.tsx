@@ -9,6 +9,7 @@ import {
   MessageSquare,
   PackageSearch,
   PauseCircle,
+  Pencil,
   PlayCircle,
   Plus,
   Printer,
@@ -173,6 +174,8 @@ const statusLabels: Record<string, string> = {
   repaired: "تم الإصلاح",
   not_repairable: "لا يمكن إصلاحها",
 };
+
+const isNewCaseStatus = (status?: string | null) => ["received", "new"].includes((status || "").trim().toLowerCase());
 
 const caseTypeLabels: Record<string, string> = {
   internal: "داخلية داخل المركز",
@@ -424,6 +427,7 @@ export function CaseDetailsPage() {
 
   const status = details?.caseData.status ?? "";
   const statusLabel = statusLabels[status] ?? status;
+  const canManageNewCase = Boolean(details && isNewCaseStatus(details.caseData.status) && hasPermission(getStoredUser(), "cases.create"));
 
   return (
     <section className="space-y-6" dir="rtl">
@@ -441,9 +445,12 @@ export function CaseDetailsPage() {
           <p className="mt-2 text-muted-foreground">صفحة تشغيلية لمتابعة بيانات الحالة والقطع والتشخيص والتنفيذ.</p>
         </div>
         {details && (
-          <div className="rounded-lg border bg-card px-4 py-3 text-left">
-            <p className="text-sm text-muted-foreground">رقم الحالة</p>
-            <p className="text-2xl font-semibold">{details.caseData.caseCode}</p>
+          <div className="grid gap-3">
+            <div className="rounded-lg border bg-card px-4 py-3 text-left">
+              <p className="text-sm text-muted-foreground">رقم الحالة</p>
+              <p className="text-2xl font-semibold">{details.caseData.caseCode}</p>
+            </div>
+            {canManageNewCase ? <NewCaseActions details={details} onSaved={loadDetails} /> : null}
           </div>
         )}
       </div>
@@ -463,6 +470,268 @@ export function CaseDetailsPage() {
         </>
       )}
     </section>
+  );
+}
+
+function NewCaseActions({ details, onSaved }: { details: CaseDetailsResponse; onSaved: () => Promise<void> }) {
+  const navigate = useNavigate();
+  const { open } = useNotification();
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [customerForm, setCustomerForm] = useState({
+    name: details.customer?.name ?? "",
+    phone: details.customer?.phone ?? "",
+    address: details.customer?.address ?? "",
+  });
+  const [deviceForm, setDeviceForm] = useState({
+    applianceType: details.device?.applianceType ?? "",
+    brand: details.device?.brand ?? "",
+    modelName: details.device?.modelName ?? "",
+    modelCode: details.device?.modelCode ?? "",
+  });
+  const [caseForm, setCaseForm] = useState({
+    customerComplaint: details.caseData.customerComplaint ?? "",
+    caseType: (details.caseData.caseType === "external" ? "external" : "internal") as "internal" | "external",
+    serialNumber: details.caseData.serialNumber ?? "",
+  });
+  const [intakeImages, setIntakeImages] = useState<File[]>([]);
+  const [intakeVideos, setIntakeVideos] = useState<File[]>([]);
+
+  useEffect(() => {
+    if (!isEditOpen) return;
+
+    setCustomerForm({
+      name: details.customer?.name ?? "",
+      phone: details.customer?.phone ?? "",
+      address: details.customer?.address ?? "",
+    });
+    setDeviceForm({
+      applianceType: details.device?.applianceType ?? "",
+      brand: details.device?.brand ?? "",
+      modelName: details.device?.modelName ?? "",
+      modelCode: details.device?.modelCode ?? "",
+    });
+    setCaseForm({
+      customerComplaint: details.caseData.customerComplaint ?? "",
+      caseType: details.caseData.caseType === "external" ? "external" : "internal",
+      serialNumber: details.caseData.serialNumber ?? "",
+    });
+    setIntakeImages([]);
+    setIntakeVideos([]);
+    setError(null);
+  }, [details, isEditOpen]);
+
+  const saveChanges = async () => {
+    setError(null);
+
+    if (!customerForm.name.trim() || !customerForm.phone.trim()) {
+      setError("اسم العميل ورقم الهاتف مطلوبان.");
+      return;
+    }
+
+    if (!deviceForm.applianceType.trim() || !deviceForm.brand.trim() || !deviceForm.modelName.trim()) {
+      setError("نوع الجهاز والماركة والموديل مطلوبة.");
+      return;
+    }
+
+    if (!caseForm.customerComplaint.trim()) {
+      setError("وصف العطل مطلوب.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      if (details.customer?.id) {
+        await apiClient(`/api/customers/${details.customer.id}`, {
+          method: "PATCH",
+          body: {
+            name: customerForm.name.trim(),
+            phone: customerForm.phone.trim(),
+            address: customerForm.address.trim() || null,
+          },
+        });
+      }
+
+      if (details.device?.id) {
+        await apiClient(`/api/devices/${details.device.id}`, {
+          method: "PATCH",
+          body: {
+            applianceType: deviceForm.applianceType.trim(),
+            brand: deviceForm.brand.trim(),
+            modelName: deviceForm.modelName.trim(),
+            modelCode: deviceForm.modelCode.trim() || null,
+          },
+        });
+      }
+
+      await apiClient(`/api/cases/${details.caseData.id}`, {
+        method: "PATCH",
+        body: {
+          customerComplaint: caseForm.customerComplaint.trim(),
+          caseType: caseForm.caseType,
+          serialNumber: caseForm.serialNumber.trim() || null,
+        },
+      });
+
+      await Promise.all([
+        ...intakeImages.map((file) =>
+          uploadCaseImageFile({
+            caseId: details.caseData.id,
+            mediaCategory: "case_intake",
+            file,
+          })
+        ),
+        ...intakeVideos.map((file) =>
+          uploadCaseVideoFile({
+            caseId: details.caseData.id,
+            mediaCategory: "case_intake",
+            file,
+          })
+        ),
+      ]);
+
+      open?.({ type: "success", message: "تم تعديل بيانات الحالة" });
+      setIsEditOpen(false);
+      await onSaved();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "تعذر تعديل بيانات الحالة.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deleteCase = async () => {
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      await apiClient(`/api/cases/${details.caseData.id}`, { method: "DELETE" });
+      open?.({ type: "success", message: "تم حذف الحالة" });
+      navigate("/cases");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "تعذر حذف الحالة.");
+      open?.({
+        type: "error",
+        message: "تعذر حذف الحالة",
+        description: deleteError instanceof Error ? deleteError.message : undefined,
+      });
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteOpen(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={() => setIsEditOpen(true)}>
+          <Pencil className="size-4" />
+          تعديل البيانات
+        </Button>
+        <Button type="button" variant="outline" size="sm" className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setIsDeleteOpen(true)}>
+          <Trash2 className="size-4" />
+          حذف الحالة
+        </Button>
+      </div>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تعديل بيانات الحالة الجديدة</DialogTitle>
+            <DialogDescription>يمكن تعديل البيانات الأساسية فقط قبل انتقال الحالة إلى خطوات التشخيص أو التنفيذ.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-5">
+            {error ? <ErrorMessage message={error} /> : null}
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="اسم العميل">
+                <Input value={customerForm.name} onChange={(event) => setCustomerForm((current) => ({ ...current, name: event.target.value }))} />
+              </Field>
+              <Field label="رقم الهاتف">
+                <Input value={customerForm.phone} onChange={(event) => setCustomerForm((current) => ({ ...current, phone: event.target.value }))} />
+              </Field>
+              <div className="md:col-span-2">
+                <Field label="العنوان">
+                  <Input value={customerForm.address} onChange={(event) => setCustomerForm((current) => ({ ...current, address: event.target.value }))} />
+                </Field>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="نوع الجهاز">
+                <Input value={deviceForm.applianceType} onChange={(event) => setDeviceForm((current) => ({ ...current, applianceType: event.target.value }))} />
+              </Field>
+              <Field label="الماركة">
+                <Input value={deviceForm.brand} onChange={(event) => setDeviceForm((current) => ({ ...current, brand: event.target.value }))} />
+              </Field>
+              <Field label="الموديل">
+                <Input value={deviceForm.modelName} onChange={(event) => setDeviceForm((current) => ({ ...current, modelName: event.target.value }))} />
+              </Field>
+              <Field label="كود الموديل">
+                <Input value={deviceForm.modelCode} onChange={(event) => setDeviceForm((current) => ({ ...current, modelCode: event.target.value }))} />
+              </Field>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <Field label="وصف العطل">
+                  <Textarea className="min-h-28" value={caseForm.customerComplaint} onChange={(event) => setCaseForm((current) => ({ ...current, customerComplaint: event.target.value }))} />
+                </Field>
+              </div>
+              <Field label="نوع الحالة">
+                <Select value={caseForm.caseType} onValueChange={(value) => setCaseForm((current) => ({ ...current, caseType: value as "internal" | "external" }))}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="internal">داخلي</SelectItem>
+                    <SelectItem value="external">خارجي</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="الرقم التسلسلي">
+                <Input value={caseForm.serialNumber} onChange={(event) => setCaseForm((current) => ({ ...current, serialNumber: event.target.value }))} />
+              </Field>
+            </div>
+
+            <div className="grid gap-3 rounded-lg border p-4">
+              <Label>إضافة مرفقات استلام</Label>
+              <Input type="file" accept="image/*" multiple onChange={(event) => setIntakeImages(Array.from(event.target.files ?? []))} />
+              <Input type="file" accept="video/*" multiple onChange={(event) => setIntakeVideos(Array.from(event.target.files ?? []))} />
+              {[...intakeImages, ...intakeVideos].length > 0 ? (
+                <div className="grid gap-1 text-sm text-muted-foreground">
+                  {[...intakeImages, ...intakeVideos].map((file) => <span key={`${file.name}-${file.size}`}>{file.name}</span>)}
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)} disabled={isSaving}>إلغاء</Button>
+            <Button type="button" onClick={saveChanges} disabled={isSaving}>
+              {isSaving ? "جارٍ الحفظ..." : "حفظ التعديلات"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف الحالة؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم حذف هذه الحالة الجديدة ومرفقاتها وسجلها. لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteCase} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isDeleting ? "جارٍ الحذف..." : "حذف الحالة"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -512,41 +781,37 @@ function IntakeMediaSection({ caseId }: { caseId: number }) {
 function BasicCaseInfo({ details }: { details: CaseDetailsResponse }) {
   const latestHistory = details.history[details.history.length - 1];
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+    <div className="grid gap-4 lg:grid-cols-3">
       <Card className="rounded-lg">
-        <CardHeader><CardTitle>المعلومات الأساسية</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
-          <Info label="حالة الحالة / الأولوية" value={details.caseData.priority || "متوسطة"} />
-          <Info label="نوع الحالة" value={getCaseTypeLabel(details.caseData.caseType)} />
-          <Info label="تاريخ الإنشاء" value={formatDate(details.caseData.createdAt)} />
-          <Info label="رقم الحالة" value={details.caseData.caseCode} />
-          <Info label="أنشأها من" value={details.createdByUser?.name || "غير محدد"} />
-          <Info label="الفني المسؤول" value={details.assignedTechnician?.name || details.caseData.technicianName || "غير معين"} />
-          <Info label="آخر رسالة" value={details.caseData.latestMessage || latestHistory?.notes || "لا توجد رسالة"} />
-          <Info label="سبب الخطأ" value={getDiagnosisText(details.caseData) || "لم يحدد بعد"} />
-          <Info label="وصف الخطأ" value={details.caseData.customerComplaint} />
+        <CardHeader className="px-4 py-3"><CardTitle className="text-lg">المعلومات الأساسية</CardTitle></CardHeader>
+        <CardContent className="grid gap-2 px-4 pb-4">
+          <CompactInfo label="الأولوية" value={details.caseData.priority || "متوسطة"} />
+          <CompactInfo label="نوع الحالة" value={getCaseTypeLabel(details.caseData.caseType)} />
+          <CompactInfo label="تاريخ الإنشاء" value={formatDate(details.caseData.createdAt)} />
+          <CompactInfo label="رقم الحالة" value={details.caseData.caseCode} />
+          <CompactInfo label="أنشأها" value={details.createdByUser?.name || "غير محدد"} />
+          <CompactInfo label="آخر رسالة" value={details.caseData.latestMessage || latestHistory?.notes || "لا توجد رسالة"} />
+          <CompactInfo label="وصف العطل" value={details.caseData.customerComplaint} />
         </CardContent>
       </Card>
-      <div className="grid gap-6">
-        <Card className="rounded-lg">
-          <CardHeader><CardTitle>بيانات العميل</CardTitle></CardHeader>
-          <CardContent className="grid gap-3">
-            <Info label="الاسم" value={details.customer?.name || "غير محدد"} />
-            <Info label="الهاتف" value={details.customer?.phone || "غير محدد"} />
-            <Info label="العنوان" value={details.customer?.address || "غير محدد"} />
-          </CardContent>
-        </Card>
-        <Card className="rounded-lg">
-          <CardHeader><CardTitle>بيانات الجهاز</CardTitle></CardHeader>
-          <CardContent className="grid gap-3">
-            <Info label="نوع الجهاز" value={details.device?.applianceType || "غير محدد"} />
-            <Info label="الماركة" value={details.device?.brand || "غير محدد"} />
-            <Info label="الموديل" value={details.device?.modelName || "غير محدد"} />
-            <Info label="الكود" value={details.device?.modelCode || "غير محدد"} />
-            <Info label="الرقم التسلسلي" value={details.caseData.serialNumber || "غير محدد"} />
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="rounded-lg">
+        <CardHeader className="px-4 py-3"><CardTitle className="text-lg">بيانات العميل</CardTitle></CardHeader>
+        <CardContent className="grid gap-2 px-4 pb-4">
+          <CompactInfo label="الاسم" value={details.customer?.name || "غير محدد"} />
+          <CompactInfo label="الهاتف" value={details.customer?.phone || "غير محدد"} />
+          <CompactInfo label="العنوان" value={details.customer?.address || "غير محدد"} />
+        </CardContent>
+      </Card>
+      <Card className="rounded-lg">
+        <CardHeader className="px-4 py-3"><CardTitle className="text-lg">بيانات الجهاز</CardTitle></CardHeader>
+        <CardContent className="grid gap-2 px-4 pb-4">
+          <CompactInfo label="نوع الجهاز" value={details.device?.applianceType || "غير محدد"} />
+          <CompactInfo label="الماركة" value={details.device?.brand || "غير محدد"} />
+          <CompactInfo label="الموديل" value={details.device?.modelName || "غير محدد"} />
+          <CompactInfo label="الكود" value={details.device?.modelCode || "غير محدد"} />
+          <CompactInfo label="الرقم التسلسلي" value={details.caseData.serialNumber || "غير متوفر"} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -2699,6 +2964,15 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 
 function Info({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg border bg-muted/20 p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 whitespace-pre-wrap font-medium leading-7">{value}</p></div>;
+}
+
+function CompactInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border bg-muted/10 px-3 py-2">
+      <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+      <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6 text-foreground">{value}</p>
+    </div>
+  );
 }
 
 function ErrorMessage({ message }: { message: string }) {

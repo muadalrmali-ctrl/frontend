@@ -83,6 +83,7 @@ type CaseDetailsResponse = {
   waitingPartInventoryItem: InventoryItem | null;
   createdByUser: UserSummary | null;
   assignedTechnician: UserSummary | null;
+  receptionPoint?: ReceptionPointSummary | null;
 };
 
 type CaseData = {
@@ -132,6 +133,17 @@ type CaseData = {
   customerReceivedAt?: string | null;
   operationFinalizedAt?: string | null;
   assignedTechnicianId?: number | null;
+  sourceType?: "main_center" | "reception_point" | string | null;
+  receptionPointId?: number | null;
+  processingMode?: "main_center_repair" | "send_to_main_center" | "local_repair" | string | null;
+  transferStatus?: "not_required" | "pending_send" | "in_transit" | "received_at_main_center" | string | null;
+  sentToMainCenterAt?: string | null;
+  mainCenterReceivedAt?: string | null;
+  mainCenterReceivedBy?: number | null;
+  mainCenterReceiptNotes?: string | null;
+  localTechnicianName?: string | null;
+  localTechnicianPhone?: string | null;
+  localRepairNotes?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 };
@@ -139,6 +151,7 @@ type CaseData = {
 type Customer = { id: number; name: string; phone: string; address?: string | null };
 type Device = { id: number; applianceType: string; brand: string; modelName: string; modelCode?: string | null; notes?: string | null };
 type UserSummary = { id: number; name: string; email: string };
+type ReceptionPointSummary = { id: number; name: string; city: string; area?: string | null };
 type CaseHistory = { id: number; toStatus: string; notes?: string | null; createdAt?: string | null; actorName?: string | null; actorRole?: string | null };
 type InventoryItem = { id: number; name: string; code: string; quantity?: number; sellingPrice?: string | null; unitCost?: string | null; imageUrl?: string | null };
 type CasePart = {
@@ -169,6 +182,7 @@ type ReadyMediaOption = {
 
 const statusLabels: Record<string, string> = {
   received: "حالة جديدة",
+  in_transit_to_main_center: "قيد النقل إلى المركز",
   waiting_part: "بانتظار القطعة",
   diagnosing: "قيد التشخيص",
   waiting_approval: "بانتظار موافقة وتسجيل استلام قطعة غيار",
@@ -760,9 +774,11 @@ function IntakeMediaSection({ caseId }: { caseId: number }) {
     };
   }, [caseId]);
 
-  const intakeImages = filterAttachments(attachments, { type: "image", category: "case_intake" });
-  const intakeVideos = filterAttachments(attachments, { type: "video", category: "case_intake" });
-  const intakeAttachments = [...intakeImages, ...intakeVideos];
+  const intakeAttachments = attachments.filter(
+    (attachment) =>
+      (attachment.category === "case_intake" || attachment.category === "reception_point_intake") &&
+      (attachment.type === "image" || attachment.type === "video" || attachment.type === "audio")
+  );
 
   return (
     <Card className="rounded-lg">
@@ -792,9 +808,24 @@ function IntakeMediaSection({ caseId }: { caseId: number }) {
 
 function BasicCaseInfo({ details }: { details: CaseDetailsResponse }) {
   const latestHistory = details.history[details.history.length - 1];
+  const isReceptionPointCase = details.caseData.sourceType === "reception_point";
+  const processingModeLabel =
+    details.caseData.processingMode === "local_repair"
+      ? "صيانة محلية"
+      : details.caseData.processingMode === "send_to_main_center"
+        ? "إرسال إلى المركز"
+        : "صيانة في المركز";
+  const transferStatusLabel =
+    details.caseData.transferStatus === "received_at_main_center"
+      ? "تم الاستلام في المركز"
+      : details.caseData.transferStatus === "in_transit"
+        ? "قيد النقل إلى المركز"
+        : details.caseData.transferStatus === "pending_send"
+          ? "بانتظار الإرسال"
+          : "غير مطلوب";
   return (
     <Card className="rounded-lg">
-      <CardContent className="grid gap-4 p-4 lg:grid-cols-3">
+      <CardContent className="grid gap-4 p-4 xl:grid-cols-4">
         <CompactInfoGroup title="المعلومات الأساسية">
           <CompactInfo label="تاريخ الإنشاء" value={formatDate(details.caseData.createdAt)} />
           <CompactInfo label="أنشأها" value={details.createdByUser?.name || "غير محدد"} />
@@ -813,6 +844,14 @@ function BasicCaseInfo({ details }: { details: CaseDetailsResponse }) {
           <CompactInfo label="الماركة" value={details.device?.brand || "غير محدد"} />
           <CompactInfo label="الموديل" value={details.device?.modelName || "غير محدد"} />
           <CompactInfo label="الكود" value={details.device?.modelCode || "غير محدد"} />
+        </CompactInfoGroup>
+
+        <CompactInfoGroup title="مصدر الحالة">
+          <CompactInfo label="المصدر" value={isReceptionPointCase ? "نقطة استلام" : "المركز الرئيسي"} />
+          {isReceptionPointCase ? <CompactInfo label="النقطة" value={details.receptionPoint ? `${details.receptionPoint.name} - ${details.receptionPoint.city}` : "غير محددة"} /> : null}
+          <CompactInfo label="المسار" value={processingModeLabel} />
+          {details.caseData.processingMode === "send_to_main_center" ? <CompactInfo label="حالة النقل" value={transferStatusLabel} /> : null}
+          {details.caseData.processingMode === "local_repair" ? <CompactInfo label="الفني المحلي" value={details.caseData.localTechnicianName || "غير محدد"} /> : null}
         </CompactInfoGroup>
       </CardContent>
     </Card>

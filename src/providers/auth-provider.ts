@@ -8,6 +8,7 @@ export type BackendUser = {
   name: string;
   email: string;
   role: string;
+  receptionPointId?: number | null;
   permissions: string[];
   createdAt?: string | null;
 };

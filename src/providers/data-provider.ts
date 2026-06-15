@@ -35,6 +35,15 @@ const endpoints: Record<string, ResourceEndpoint> = {
     list: "/api/cases/maintenance-operations",
     show: (id) => `/api/cases/maintenance-operations/${id}`,
   },
+  "reception-points": {
+    list: "/api/reception-points",
+    show: (id) => `/api/reception-points/${id}`,
+    create: "/api/reception-points",
+    update: (id) => `/api/reception-points/${id}`,
+  },
+  "incoming-reception-cases": {
+    list: "/api/cases/incoming-reception-cases",
+  },
   customers: {
     list: "/api/customers",
     show: (id) => `/api/customers/${id}`,

@@ -5,6 +5,7 @@ export const APP_ROLES = [
   "store_manager",
   "technician_manager",
   "maintenance_manager",
+  "reception_point_user",
 ] as const;
 
 export type AppRole = (typeof APP_ROLES)[number];
@@ -21,11 +22,12 @@ export const ROLE_LABELS: Record<AppRole, string> = {
   store_manager: "مدير مخزن",
   technician_manager: "مسؤول الفنيين",
   maintenance_manager: "مدير الصيانة",
+  reception_point_user: "موظف نقطة استلام",
 };
 
 const LEGACY_RESOURCE_ACCESS: Record<string, AppRole[]> = {
-  dashboard: ["admin", "receptionist", "technician", "store_manager", "technician_manager", "maintenance_manager"],
-  cases: ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager"],
+  dashboard: ["admin", "receptionist", "technician", "store_manager", "technician_manager", "maintenance_manager", "reception_point_user"],
+  cases: ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager", "reception_point_user"],
   "maintenance-operations": ["admin", "receptionist", "technician", "technician_manager", "maintenance_manager"],
   inventory: ["admin", "store_manager"],
   sales: ["admin", "receptionist", "store_manager"],
@@ -35,12 +37,16 @@ const LEGACY_RESOURCE_ACCESS: Record<string, AppRole[]> = {
   "accounting-team": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
   "accounting-suppliers": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
   "accounting-devices": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
+  "reception-points": ["admin", "receptionist", "maintenance_manager"],
+  "incoming-reception-cases": ["admin", "receptionist", "maintenance_manager"],
   "invoice-preview": ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager"],
 };
 
 export const RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
   dashboard: ["dashboard.view"],
   cases: ["cases.view"],
+  "reception-points": ["reception_points.view"],
+  "incoming-reception-cases": ["reception_points.receive_cases"],
   "maintenance-operations": ["maintenance_operations.view"],
   inventory: ["inventory.view"],
   sales: ["sales.view"],
@@ -62,6 +68,7 @@ export const RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
 
 export const CASE_COLUMN_PERMISSION_MAP: Record<string, string> = {
   received: "cases.column.new.view",
+  in_transit_to_main_center: "reception_points.receive_cases",
   waiting_part: "cases.column.waiting.view",
   diagnosing: "cases.column.diagnosis.view",
   waiting_approval: "cases.column.approval_part_delivery.view",
@@ -119,6 +126,7 @@ export const canAccessResource = (user: AuthUserLike | string | null | undefined
 export const getDefaultRouteForRole = (role: string | null | undefined) => {
   switch (role) {
     case "technician":
+    case "reception_point_user":
       return "/cases";
     case "store_manager":
       return "/inventory";
@@ -136,6 +144,7 @@ export const getDefaultRouteForUser = (user: AuthUserLike | string | null | unde
   const preferredRoutes: Array<{ resource: string; path: string }> = [
     { resource: "dashboard", path: "/" },
     { resource: "cases", path: "/cases" },
+    { resource: "incoming-reception-cases", path: "/incoming-reception-cases" },
     { resource: "maintenance-operations", path: "/maintenance-operations" },
     { resource: "inventory", path: "/inventory" },
     { resource: "sales", path: "/sales" },

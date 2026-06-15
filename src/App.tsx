@@ -14,6 +14,8 @@ import {
   Cpu,
   DollarSign,
   Home,
+  Inbox,
+  MapPin,
   Package,
   Truck,
   UserRound,
@@ -64,6 +66,15 @@ const MaintenanceOperationDetailsPage = lazy(() =>
   import("./pages/maintenance-operations/show").then((module) => ({
     default: module.MaintenanceOperationDetailsPage,
   }))
+);
+const ReceptionPointsPage = lazy(() =>
+  import("./pages/reception-points/list").then((module) => ({ default: module.ReceptionPointsPage }))
+);
+const ReceptionPointDetailsPage = lazy(() =>
+  import("./pages/reception-points/show").then((module) => ({ default: module.ReceptionPointDetailsPage }))
+);
+const IncomingReceptionCasesPage = lazy(() =>
+  import("./pages/incoming-reception-cases/list").then((module) => ({ default: module.IncomingReceptionCasesPage }))
 );
 const InventoryPage = lazy(() =>
   import("./pages/inventory/list").then((module) => ({ default: module.InventoryPage }))
@@ -185,7 +196,7 @@ function App() {
                 meta: {
                   label: "Dashboard",
                   icon: <Home size={16} />,
-                  roles: ["admin", "receptionist", "technician", "store_manager", "technician_manager", "maintenance_manager"],
+                  roles: ["admin", "receptionist", "technician", "store_manager", "technician_manager", "maintenance_manager", "reception_point_user"],
                 },
               },
               {
@@ -196,7 +207,26 @@ function App() {
                 meta: {
                   label: "Cases",
                   icon: <ClipboardList size={16} />,
-                  roles: ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager"],
+                  roles: ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager", "reception_point_user"],
+                },
+              },
+              {
+                name: "incoming-reception-cases",
+                list: "/incoming-reception-cases",
+                meta: {
+                  label: "استلام نقاط الاستلام",
+                  icon: <Inbox size={16} />,
+                  roles: ["admin", "receptionist", "maintenance_manager"],
+                },
+              },
+              {
+                name: "reception-points",
+                list: "/reception-points",
+                show: "/reception-points/:id",
+                meta: {
+                  label: "نقاط الاستلام",
+                  icon: <MapPin size={16} />,
+                  roles: ["admin", "receptionist", "maintenance_manager"],
                 },
               },
               {
@@ -335,6 +365,9 @@ function App() {
                   <Route path="cases" element={<ProtectedAccessRoute resource="cases"><CasesPage /></ProtectedAccessRoute>} />
                   <Route path="cases/create" element={<ProtectedAccessRoute resource="cases" requiredPermissions={["cases.create"]}><CreateCasePage /></ProtectedAccessRoute>} />
                   <Route path="cases/:id" element={<ProtectedAccessRoute resource="cases"><CaseDetailsPage /></ProtectedAccessRoute>} />
+                  <Route path="incoming-reception-cases" element={<ProtectedAccessRoute resource="incoming-reception-cases"><IncomingReceptionCasesPage /></ProtectedAccessRoute>} />
+                  <Route path="reception-points" element={<ProtectedAccessRoute resource="reception-points"><ReceptionPointsPage /></ProtectedAccessRoute>} />
+                  <Route path="reception-points/:id" element={<ProtectedAccessRoute resource="reception-points"><ReceptionPointDetailsPage /></ProtectedAccessRoute>} />
                   <Route
                     path="maintenance-operations"
                     element={<ProtectedAccessRoute resource="maintenance-operations"><MaintenanceOperationsPage /></ProtectedAccessRoute>}

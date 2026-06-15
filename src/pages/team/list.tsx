@@ -60,7 +60,10 @@ type InvitationFormState = {
   phone: string;
   notes: string;
   expiresInDays: string;
+  receptionPointId: string;
 };
+
+type ReceptionPoint = { id: number; name: string; city: string; status: string };
 
 const avatarColors = [
   "bg-emerald-100 text-emerald-700",
@@ -120,6 +123,12 @@ export function TeamPage() {
       enabled: canView,
     },
   });
+  const receptionPointsQuery = useList<ReceptionPoint>({
+    resource: "reception-points",
+    queryOptions: {
+      enabled: allowedRoles.includes("reception_point_user"),
+    },
+  });
   const { mutateAsync: createInvitation, mutation } = useCreate();
 
   const teamMembers = result.data ?? [];
@@ -136,6 +145,7 @@ export function TeamPage() {
     phone: "",
     notes: "",
     expiresInDays: "7",
+    receptionPointId: "",
   });
 
   const openInviteDialog = () => {
@@ -146,6 +156,7 @@ export function TeamPage() {
       phone: "",
       notes: "",
       expiresInDays: "7",
+      receptionPointId: "",
     });
     setInviteError(null);
     setInviteResult(null);
@@ -165,6 +176,7 @@ export function TeamPage() {
           phone: form.phone || undefined,
           notes: form.notes || undefined,
           expiresInDays: Number(form.expiresInDays || 7),
+          receptionPointId: form.role === "reception_point_user" ? Number(form.receptionPointId) : undefined,
         },
       })) as { data: InvitationRecord };
 
@@ -378,6 +390,29 @@ export function TeamPage() {
                 </Select>
               </div>
 
+              {form.role === "reception_point_user" ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="invite-reception-point">نقطة الاستلام</Label>
+                  <Select
+                    value={form.receptionPointId}
+                    onValueChange={(value) => setForm((current) => ({ ...current, receptionPointId: value }))}
+                  >
+                    <SelectTrigger id="invite-reception-point" className="w-full">
+                      <SelectValue placeholder="اختر نقطة الاستلام" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(receptionPointsQuery.result.data ?? [])
+                        .filter((point) => point.status === "active")
+                        .map((point) => (
+                          <SelectItem key={point.id} value={String(point.id)}>
+                            {point.name} - {point.city}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+
               <div className="grid gap-2 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label htmlFor="invite-name">الاسم</Label>
@@ -483,7 +518,7 @@ export function TeamPage() {
               <Button
                 type="button"
                 onClick={handleCreateInvitation}
-                disabled={mutation.isPending || allowedRoles.length === 0}
+                disabled={mutation.isPending || allowedRoles.length === 0 || (form.role === "reception_point_user" && !form.receptionPointId)}
               >
                 <ShieldCheck className="size-4" />
                 {mutation.isPending ? "جارٍ الإنشاء..." : "إنشاء الدعوة"}

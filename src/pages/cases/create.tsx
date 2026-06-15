@@ -19,17 +19,23 @@ import {
   uploadCaseVideoFile,
 } from "@/lib/case-media-upload";
 import { ApiError } from "@/providers/api-client";
+import { getStoredUser } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
 
 type Customer = { id: number; name: string; phone: string; address?: string | null };
 type Device = { id: number; applianceType: string; brand: string; modelName: string; modelCode?: string | null };
 type CreatedCase = { id: number };
+type ReceptionPoint = { id: number; name: string; city: string; area?: string | null; status: string };
 
 type CreateCaseValues = {
   caseType: "internal" | "external";
   selectedCustomerId: number | null;
   selectedDeviceId: number | null;
   customerComplaint: string;
+  processingMode: "send_to_main_center" | "local_repair";
+  localTechnicianName: string;
+  localTechnicianPhone: string;
+  localRepairNotes: string;
 };
 
 type NewCustomerValues = { name: string; phone: string; address: string };
@@ -40,6 +46,10 @@ const initialValues: CreateCaseValues = {
   selectedCustomerId: null,
   selectedDeviceId: null,
   customerComplaint: "",
+  processingMode: "send_to_main_center",
+  localTechnicianName: "",
+  localTechnicianPhone: "",
+  localRepairNotes: "",
 };
 
 const initialCustomerValues: NewCustomerValues = { name: "", phone: "", address: "" };
@@ -78,8 +88,14 @@ export function CreateCasePage() {
   const { open } = useNotification();
   const { mutateAsync: createCase, mutation: caseMutation } = useCreate();
   const { mutateAsync: createRecord, mutation: recordMutation } = useCreate();
+  const currentUser = getStoredUser();
+  const isReceptionPointUser = currentUser?.role === "reception_point_user";
   const customersQuery = useList<Customer>({ resource: "customers" });
   const devicesQuery = useList<Device>({ resource: "devices" });
+  const receptionPointsQuery = useList<ReceptionPoint>({
+    resource: "reception-points",
+    queryOptions: { enabled: isReceptionPointUser },
+  });
   const [values, setValues] = useState<CreateCaseValues>(initialValues);
   const [newCustomer, setNewCustomer] = useState<NewCustomerValues>(initialCustomerValues);
   const [newDevice, setNewDevice] = useState<NewDeviceValues>(initialDeviceValues);
@@ -92,6 +108,7 @@ export function CreateCasePage() {
 
   const customers = customersQuery.result.data ?? [];
   const devices = devicesQuery.result.data ?? [];
+  const activeReceptionPoint = receptionPointsQuery.result.data?.find((point) => point.id === currentUser?.receptionPointId);
   const selectedCustomer = useMemo(
     () => customers.find((customer) => customer.id === values.selectedCustomerId),
     [customers, values.selectedCustomerId]
@@ -190,14 +207,14 @@ export function CreateCasePage() {
       ...intakeImages.map((file) =>
         uploadCaseImageFile({
           caseId,
-          mediaCategory: "case_intake",
+          mediaCategory: isReceptionPointUser ? "reception_point_intake" : "case_intake",
           file,
         })
       ),
       ...intakeVideos.map((file) =>
         uploadCaseVideoFile({
           caseId,
-          mediaCategory: "case_intake",
+          mediaCategory: isReceptionPointUser ? "reception_point_intake" : "case_intake",
           file,
         })
       ),
@@ -242,6 +259,17 @@ export function CreateCasePage() {
           deviceId: values.selectedDeviceId,
           caseType: values.caseType,
           customerComplaint: values.customerComplaint.trim(),
+          ...(isReceptionPointUser
+            ? {
+                sourceType: "reception_point",
+                receptionPointId: currentUser?.receptionPointId,
+                processingMode: values.processingMode,
+                transferStatus: values.processingMode === "send_to_main_center" ? "in_transit" : "not_required",
+                localTechnicianName: values.processingMode === "local_repair" ? values.localTechnicianName.trim() || null : null,
+                localTechnicianPhone: values.processingMode === "local_repair" ? values.localTechnicianPhone.trim() || null : null,
+                localRepairNotes: values.processingMode === "local_repair" ? values.localRepairNotes.trim() || null : null,
+              }
+            : {}),
         },
       })) as { data: CreatedCase };
 
@@ -365,6 +393,40 @@ export function CreateCasePage() {
               </Select>
             </Field>
           </FormSection>
+
+          {isReceptionPointUser ? (
+            <FormSection title="مسار المعالجة">
+              <div className="rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground">
+                نقطة الاستلام: <span className="font-bold text-foreground">{activeReceptionPoint?.name || "نقطة الاستلام الحالية"}</span>
+              </div>
+              <Field label="اختر المسار">
+                <Select value={values.processingMode} onValueChange={(value) => setField("processingMode", value as CreateCaseValues["processingMode"])}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="send_to_main_center">إرسال إلى المركز الرئيسي</SelectItem>
+                    <SelectItem value="local_repair">صيانة محلية</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              {values.processingMode === "local_repair" ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="اسم الفني المحلي" htmlFor="localTechnicianName">
+                    <Input id="localTechnicianName" value={values.localTechnicianName} onChange={(event) => setField("localTechnicianName", event.target.value)} />
+                  </Field>
+                  <Field label="هاتف الفني المحلي" htmlFor="localTechnicianPhone">
+                    <Input id="localTechnicianPhone" value={values.localTechnicianPhone} onChange={(event) => setField("localTechnicianPhone", event.target.value)} />
+                  </Field>
+                  <div className="md:col-span-2">
+                    <Field label="ملاحظات الصيانة المحلية" htmlFor="localRepairNotes">
+                      <Textarea id="localRepairNotes" value={values.localRepairNotes} onChange={(event) => setField("localRepairNotes", event.target.value)} />
+                    </Field>
+                  </div>
+                </div>
+              ) : (
+                <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">سيتم إنشاء الحالة كقيد النقل إلى المركز حتى يؤكد موظف المركز الاستلام.</p>
+              )}
+            </FormSection>
+          ) : null}
 
           <FormSection title="مرفقات الاستلام">
             <MediaPicker

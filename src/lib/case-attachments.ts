@@ -6,6 +6,8 @@ export type CaseAttachmentCategory =
   | "product_image"
   | "damaged_part_image"
   | "case_intake"
+  | "reception_point_intake"
+  | "center_receipt"
   | "general"
   | "waiting_part";
 
@@ -60,6 +62,8 @@ const normalizeCategory = (value?: string | null): CaseAttachmentCategory => {
     case "product_image":
     case "damaged_part_image":
     case "case_intake":
+    case "reception_point_intake":
+    case "center_receipt":
     case "general":
     case "waiting_part":
       return value;

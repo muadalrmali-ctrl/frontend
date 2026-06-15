@@ -1,6 +1,6 @@
 import { DragEvent, useMemo, useState } from "react";
 import { useList, useUpdate } from "@refinedev/core";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox, Plus } from "lucide-react";
 import { Link } from "react-router";
 import { CaseTypeBadge } from "@/components/cases/case-badges";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,11 @@ type CaseRecord = {
   deviceApplianceType?: string | null;
   deviceBrand?: string | null;
   deviceModelName?: string | null;
+  sourceType?: string | null;
+  processingMode?: string | null;
+  transferStatus?: string | null;
+  receptionPointName?: string | null;
+  receptionPointCity?: string | null;
 };
 
 type WorkflowColumn = {
@@ -116,6 +121,7 @@ const getDeviceName = (caseItem: CaseRecord) =>
 export function CasesPage() {
   const currentUser = getStoredUser();
   const canCreateCase = hasPermission(currentUser, "cases.create");
+  const canReceiveReceptionCases = hasPermission(currentUser, "reception_points.receive_cases");
   const [columnCollapseOverrides, setColumnCollapseOverrides] = useState<Record<string, boolean>>({});
   const [draggedCase, setDraggedCase] = useState<CaseRecord | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
@@ -123,6 +129,11 @@ export function CasesPage() {
   const { result, query } = useList<CaseRecord>({ resource: "cases" });
 
   const cases = result.data ?? [];
+  const incomingReceptionCasesCount = cases.filter(
+    (caseItem) =>
+      caseItem.processingMode === "send_to_main_center" &&
+      (caseItem.status === "in_transit_to_main_center" || ["pending_send", "in_transit"].includes(caseItem.transferStatus || ""))
+  ).length;
 
   const groupedCases = useMemo(() => {
     return WORKFLOW_COLUMNS
@@ -188,14 +199,25 @@ export function CasesPage() {
           <p className="text-muted-foreground">تابع كل حالة عبر مراحل الصيانة الداخلية.</p>
         </div>
 
-        {canCreateCase ? (
-          <Button size="lg" className="w-full sm:w-auto" asChild>
-            <Link to="/cases/create">
-              <Plus />
-              إنشاء حالة جديدة
-            </Link>
-          </Button>
-        ) : null}
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {canReceiveReceptionCases ? (
+            <Button size="lg" variant="outline" className="w-full sm:w-auto" asChild>
+              <Link to="/incoming-reception-cases">
+                <Inbox />
+                الحالات القادمة من نقاط الاستلام
+                <Badge variant="secondary" className="ms-1">{incomingReceptionCasesCount}</Badge>
+              </Link>
+            </Button>
+          ) : null}
+          {canCreateCase ? (
+            <Button size="lg" className="w-full sm:w-auto" asChild>
+              <Link to="/cases/create">
+                <Plus />
+                إنشاء حالة جديدة
+              </Link>
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {transitionError ? <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{transitionError}</p> : null}
@@ -346,6 +368,8 @@ function CaseCard({
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <CaseTypeBadge caseType={caseItem.caseType} />
+          {caseItem.processingMode === "local_repair" ? <Badge variant="outline">صيانة محلية</Badge> : null}
+          {caseItem.status === "in_transit_to_main_center" ? <Badge variant="secondary">قيد النقل</Badge> : null}
         </div>
       </div>
 

@@ -1,35 +1,4 @@
 # Logs
-<<<<<<< HEAD
-
-logs
-_.log
-npm-debug.log_
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
-
-# Environment variables
-.env
-.env.local
-
-# Editor directories and files
-
-.vscode/_
-!.vscode/extensions.json
-.idea
-.DS_Store
-_.suo
-_.ntvs_
-_.njsproj
-_.sln
-\*.sw?
-=======
 logs
 *.log
 npm-debug.log*
@@ -168,4 +137,3 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
->>>>>>> 8e53921831bd78101307b5f791c0e21d4ac516de

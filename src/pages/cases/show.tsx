@@ -4,6 +4,8 @@ import { Link, useNavigate, useParams } from "react-router";
 import {
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock3,
   ImageIcon,
   MessageSquare,
@@ -737,6 +739,7 @@ function NewCaseActions({ details, onSaved }: { details: CaseDetailsResponse; on
 
 function IntakeMediaSection({ caseId }: { caseId: number }) {
   const [attachments, setAttachments] = useState<CaseAttachment[]>([]);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -763,17 +766,26 @@ function IntakeMediaSection({ caseId }: { caseId: number }) {
 
   return (
     <Card className="rounded-lg">
-      <CardHeader>
-        <CardTitle>مرفقات الاستلام</CardTitle>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <CardTitle>مرفقات الاستلام</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">{intakeAttachments.length} مرفق</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={() => setIsExpanded((current) => !current)}>
+          {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          {isExpanded ? "إخفاء مرفقات الاستلام" : "عرض مرفقات الاستلام"}
+        </Button>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        {error ? <ErrorMessage message={error} /> : null}
-        <AttachmentGallery
-          attachments={intakeAttachments}
-          emptyMessage="لا توجد صور أو فيديوهات استلام محفوظة لهذه الحالة."
-          className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-        />
-      </CardContent>
+      {isExpanded ? (
+        <CardContent className="grid gap-4">
+          {error ? <ErrorMessage message={error} /> : null}
+          <AttachmentGallery
+            attachments={intakeAttachments}
+            emptyMessage="لا توجد صور أو فيديوهات استلام محفوظة لهذه الحالة."
+            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+          />
+        </CardContent>
+      ) : null}
     </Card>
   );
 }
@@ -808,6 +820,8 @@ function BasicCaseInfo({ details }: { details: CaseDetailsResponse }) {
 }
 
 function CaseActivityTimeline({ history }: { history: CaseHistory[] }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   if (!history.length) {
     return null;
   }
@@ -819,34 +833,43 @@ function CaseActivityTimeline({ history }: { history: CaseHistory[] }) {
 
   return (
     <Card className="rounded-lg">
-      <CardHeader>
-        <CardTitle>سجل النشاط</CardTitle>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <CardTitle>سجل النشاط</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">{history.length} حدث</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={() => setIsExpanded((current) => !current)}>
+          {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          {isExpanded ? "إخفاء سجل النشاط" : "عرض سجل النشاط"}
+        </Button>
       </CardHeader>
-      <CardContent className="grid gap-3">
-        {orderedHistory.map((entry) => {
-          const partName = getTimelinePartName(entry);
-          return (
-            <div key={entry.id} className="rounded-xl border bg-muted/20 p-4">
-              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                <div className="space-y-1">
-                  <p className="font-semibold">{getTimelineLabel(entry)}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {entry.actorName || "مستخدم النظام"} • {formatDate(entry.createdAt)}
-                  </p>
+      {isExpanded ? (
+        <CardContent className="grid gap-3">
+          {orderedHistory.map((entry) => {
+            const partName = getTimelinePartName(entry);
+            return (
+              <div key={entry.id} className="rounded-xl border bg-muted/20 p-4">
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                  <div className="space-y-1">
+                    <p className="font-semibold">{getTimelineLabel(entry)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {entry.actorName || "مستخدم النظام"} • {formatDate(entry.createdAt)}
+                    </p>
+                  </div>
+                  {partName && (
+                    <Badge variant="outline" className="w-fit">
+                      {partName}
+                    </Badge>
+                  )}
                 </div>
-                {partName && (
-                  <Badge variant="outline" className="w-fit">
-                    {partName}
-                  </Badge>
+                {entry.notes && !partName && (
+                  <p className="mt-2 text-sm text-muted-foreground">{entry.notes}</p>
                 )}
               </div>
-              {entry.notes && !partName && (
-                <p className="mt-2 text-sm text-muted-foreground">{entry.notes}</p>
-              )}
-            </div>
-          );
-        })}
-      </CardContent>
+            );
+          })}
+        </CardContent>
+      ) : null}
     </Card>
   );
 }
@@ -2210,7 +2233,6 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
   const [repairImages, setRepairImages] = useState<string[]>(parseImageList(details.caseData.postRepairImages));
   const [repairVideos, setRepairVideos] = useState<string[]>(parseImageList(details.caseData.postRepairVideos));
   const [damagedPartImages, setDamagedPartImages] = useState<string[]>(parseImageList(details.caseData.postRepairDamagedPartImages));
-  const [note, setNote] = useState(details.caseData.postRepairNote || "");
   const [isReadyDialogOpen, setIsReadyDialogOpen] = useState(false);
   const [readySummary, setReadySummary] = useState(details.caseData.postRepairCompletedWork || "");
   const [readyFinalCost, setReadyFinalCost] = useState(formatMoney(invoiceTotal));
@@ -2480,7 +2502,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
     postRepairImages: stringifyImageList(repairImages),
     postRepairVideos: stringifyImageList(repairVideos),
     postRepairDamagedPartImages: stringifyImageList(damagedPartImages),
-    postRepairNote: note,
+    postRepairNote: details.caseData.postRepairNote,
   });
 
   const sendReadyNotification = async () => {
@@ -2538,18 +2560,21 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
   return (
     <div className="grid gap-6">
     <Card className="rounded-lg">
-      <CardHeader><CardTitle>ملخص الإصلاح</CardTitle></CardHeader>
-      <CardContent className="grid gap-5">
+      <CardHeader className="px-4 py-3"><CardTitle className="text-lg">ملخص الإصلاح</CardTitle></CardHeader>
+      <CardContent className="grid gap-3 px-4 pb-4">
         {error && <ErrorMessage message={error} />}
-        <div className="grid gap-3 md:grid-cols-3">
-          <Info label="وقت التنفيذ الفعلي" value={formatDuration(actualSeconds)} />
-          <Info label="مدة التنفيذ المقدرة" value={`${details.caseData.executionDurationDays || 0} يوم / ${details.caseData.executionDurationHours || 0} ساعة`} />
-          <div className="rounded-lg border bg-muted/20 p-3">
-            <p className="text-xs text-muted-foreground">مؤشر المتابعة</p>
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          <CompactInfo label="ملخص الإصلاح" value={completedWork || details.caseData.postRepairCompletedWork || "غير محدد"} />
+          <CompactInfo label="التكلفة النهائية" value={formatMoney(invoiceTotal)} />
+          <CompactInfo label="تاريخ الإكمال" value={formatDate(details.caseData.executionCompletedAt || details.caseData.updatedAt)} />
+          <CompactInfo label="الفني" value={details.assignedTechnician?.name || details.caseData.technicianName || "غير محدد"} />
+          <CompactInfo label="وقت التنفيذ الفعلي" value={formatDuration(actualSeconds)} />
+          <CompactInfo label="مدة التنفيذ المقدرة" value={`${details.caseData.executionDurationDays || 0} يوم / ${details.caseData.executionDurationHours || 0} ساعة`} />
+          <div className="rounded-md border bg-muted/10 px-2.5 py-2">
+            <p className="text-[11px] font-medium text-muted-foreground">مؤشر المتابعة</p>
             <Badge variant={performance.tone} className="mt-2">{performance.label}</Badge>
           </div>
         </div>
-        <InvoicePreview parts={parts} services={services} />
       </CardContent>
     </Card>
     <Card className="rounded-lg">
@@ -2561,7 +2586,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
         <label className="flex items-center gap-2 rounded-lg border p-3"><input type="checkbox" checked={cleaned} onChange={(event) => setCleaned(event.target.checked)} disabled={!canManageQuality} /> تم تنظيف الجهاز</label>
         <Field label="نصائح فنية للعميل"><Textarea value={recommendations} onChange={(event) => setRecommendations(event.target.value)} disabled={!canManageQuality} /></Field>
         <CaseAttachmentUploader
-          title="صور الجهاز بعد الإصلاح"
+          title="صورة الجهاز بعد الإصلاح"
           description="تظل الصور مرتبطة بالحالة وتظهر أيضًا في صفحة العمليات المكتملة."
           type="image"
           accept="image/*"
@@ -2569,7 +2594,7 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
           uploading={isUploadingRepairMedia}
           disabled={!canManageQuality}
           maxItems={4}
-          uploadLabel="رفع صور بعد الإصلاح"
+          uploadLabel="رفع صورة الجهاز"
           onUpload={(files) =>
             uploadRepairAttachments(
               files,
@@ -2626,15 +2651,15 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
           }
         />
         <CaseAttachmentUploader
-          title="القطعة المعطوبة"
-          description="يمكن توثيق القطعة المعطوبة بصور تبقى محفوظة مع الحالة."
+          title="صورة القطعة المعطوبة"
+          description="توثيق القطعة المعطوبة بصورة محفوظة مع الحالة دون تكرار حقول إضافية."
           type="image"
           accept="image/*"
           attachments={damagedPartAttachments}
           uploading={isUploadingRepairMedia}
           disabled={!canManageQuality}
           maxItems={4}
-          uploadLabel="رفع صور القطعة"
+          uploadLabel="رفع صورة القطعة"
           onUpload={(files) =>
             uploadRepairAttachments(
               files,
@@ -2678,7 +2703,6 @@ function RepairedSection({ details, parts, services, onSaved }: { details: CaseD
             )
           }
         />
-        <Field label="ملاحظة"><Textarea value={note} onChange={(event) => setNote(event.target.value)} disabled={!canManageQuality} /></Field>
       </CardContent>
     </Card>
     <Card className="rounded-lg">

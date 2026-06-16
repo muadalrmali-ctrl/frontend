@@ -1,9 +1,24 @@
 import { useMemo, useState } from "react";
-import { useList } from "@refinedev/core";
+import { useList, useNotification } from "@refinedev/core";
 import { Link } from "react-router";
+import { Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { hasPermission } from "@/lib/access-control";
+import { apiClient } from "@/providers/api-client";
+import { getStoredUser } from "@/providers/auth-provider";
 
 type Operation = {
   id: number;
@@ -27,7 +42,12 @@ const formatDate = (value?: string | null) =>
   value ? new Intl.DateTimeFormat("ar-LY", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "غير محدد";
 
 export function MaintenanceOperationsPage() {
+  const currentUser = getStoredUser();
+  const canDeleteOperation = hasPermission(currentUser, "delete_maintenance_operation");
+  const { open } = useNotification();
   const [search, setSearch] = useState("");
+  const [operationToDelete, setOperationToDelete] = useState<Operation | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { result, query } = useList<Operation>({ resource: "maintenance-operations" });
   const operations = result.data ?? [];
 
@@ -47,6 +67,32 @@ export function MaintenanceOperationsPage() {
       ].filter(Boolean).join(" ").toLowerCase().includes(value)
     );
   }, [operations, search]);
+
+  const deleteOperation = async () => {
+    if (!operationToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await apiClient(`/api/cases/maintenance-operations/${operationToDelete.id}`, {
+        method: "DELETE",
+      });
+      open?.({
+        type: "success",
+        message: "تم حذف العملية",
+        description: "تم حذف عملية الصيانة من الأرشيف.",
+      });
+      setOperationToDelete(null);
+      await query.refetch();
+    } catch (error) {
+      open?.({
+        type: "error",
+        message: "تعذر حذف العملية",
+        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <section className="space-y-6" dir="rtl">
@@ -72,7 +118,24 @@ export function MaintenanceOperationsPage() {
                   <CardHeader className="pb-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <CardTitle>{operation.caseCode}</CardTitle>
-                      <Badge variant={operation.status === "not_repairable" ? "destructive" : "default"}>{statusLabel(operation.status)}</Badge>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={operation.status === "not_repairable" ? "destructive" : "default"}>{statusLabel(operation.status)}</Badge>
+                        {canDeleteOperation ? (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setOperationToDelete(operation);
+                            }}
+                          >
+                            <Trash2 className="size-4" />
+                            حذف العملية
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="grid gap-3 md:grid-cols-4">
@@ -87,6 +150,21 @@ export function MaintenanceOperationsPage() {
           )}
         </div>
       )}
+
+      <AlertDialog open={Boolean(operationToDelete)} onOpenChange={(openState) => !openState && setOperationToDelete(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف العملية</AlertDialogTitle>
+            <AlertDialogDescription>هل أنت متأكد من حذف عملية الصيانة؟</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteOperation} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isDeleting ? "جاري الحذف..." : "تأكيد الحذف"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

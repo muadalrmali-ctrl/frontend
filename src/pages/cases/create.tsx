@@ -113,11 +113,15 @@ export function CreateCasePage() {
   const customers = customersQuery.result.data ?? [];
   const devices = devicesQuery.result.data ?? [];
   const activeReceptionPoints = (receptionPointsQuery.result.data ?? []).filter((point) => point.status === "active");
-  const selectedReceptionPointId = values.receivingLocation.startsWith("reception_point:")
+  const parsedReceptionPointId = values.receivingLocation.startsWith("reception_point:")
     ? Number(values.receivingLocation.split(":")[1])
     : null;
+  const lockedReceptionPointId = isReceptionPointUser
+    ? currentUser?.receptionPointId ?? activeReceptionPoints[0]?.id ?? null
+    : null;
+  const selectedReceptionPointId = lockedReceptionPointId ?? parsedReceptionPointId;
   const isReceptionPointCase = Boolean(selectedReceptionPointId);
-  const activeReceptionPoint = activeReceptionPoints.find((point) => point.id === (selectedReceptionPointId ?? currentUser?.receptionPointId));
+  const activeReceptionPoint = activeReceptionPoints.find((point) => point.id === selectedReceptionPointId);
   const lockedReceptionPointLabel = activeReceptionPoint
     ? `${activeReceptionPoint.name}${activeReceptionPoint.city ? ` - ${activeReceptionPoint.city}` : ""}`
     : "نقطة الاستلام الخاصة بك";
@@ -134,10 +138,10 @@ export function CreateCasePage() {
     setValues((current) => ({ ...current, [key]: value }));
 
   useEffect(() => {
-    if (isReceptionPointUser && currentUser?.receptionPointId) {
-      setField("receivingLocation", `reception_point:${currentUser.receptionPointId}`);
+    if (isReceptionPointUser && lockedReceptionPointId) {
+      setField("receivingLocation", `reception_point:${lockedReceptionPointId}`);
     }
-  }, [isReceptionPointUser, currentUser?.receptionPointId]);
+  }, [isReceptionPointUser, lockedReceptionPointId]);
 
   const handleCreateCustomer = async () => {
     setError(null);
@@ -264,6 +268,11 @@ export function CreateCasePage() {
 
     if (!values.customerComplaint.trim()) {
       setError("أدخل وصف العطل قبل إنشاء الحالة.");
+      return;
+    }
+
+    if (isReceptionPointUser && !selectedReceptionPointId) {
+      setError("تعذر تحديد نقطة الاستلام الخاصة بك. يرجى تسجيل الخروج والدخول مرة أخرى أو مراجعة المسؤول.");
       return;
     }
 
@@ -424,8 +433,8 @@ export function CreateCasePage() {
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {!isReceptionPointUser ? <SelectItem value="main_center">المركز الرئيسي</SelectItem> : null}
-                  {isReceptionPointUser && currentUser?.receptionPointId ? (
-                    <SelectItem value={`reception_point:${currentUser.receptionPointId}`}>
+                  {isReceptionPointUser && lockedReceptionPointId ? (
+                    <SelectItem value={`reception_point:${lockedReceptionPointId}`}>
                       {lockedReceptionPointLabel}
                     </SelectItem>
                   ) : null}

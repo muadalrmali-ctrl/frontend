@@ -216,7 +216,7 @@ function App() {
                 meta: {
                   label: "استلام نقاط الاستلام",
                   icon: <Inbox size={16} />,
-                  roles: ["admin", "receptionist", "maintenance_manager"],
+                  roles: ["admin", "receptionist", "maintenance_manager", "reception_point_user"],
                 },
               },
               {
@@ -226,7 +226,7 @@ function App() {
                 meta: {
                   label: "Maintenance Operations",
                   icon: <Wrench size={16} />,
-                  roles: ["admin", "receptionist", "technician", "technician_manager", "maintenance_manager"],
+                  roles: ["admin", "receptionist", "technician", "technician_manager", "maintenance_manager", "reception_point_user"],
                 },
               },
               {

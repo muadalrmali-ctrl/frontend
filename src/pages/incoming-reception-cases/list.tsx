@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Textarea } from "@/components/ui/textarea";
 import { filterAttachments, normalizeCaseAttachments, type CaseAttachment, type RawCaseAttachment } from "@/lib/case-attachments";
 import { apiClient } from "@/providers/api-client";
+import { hasPermission } from "@/lib/access-control";
+import { getStoredUser } from "@/providers/auth-provider";
 
 type IncomingCase = {
   id: number;
@@ -27,6 +29,8 @@ type IncomingCase = {
 
 export function IncomingReceptionCasesPage() {
   const { open } = useNotification();
+  const currentUser = getStoredUser();
+  const canReceiveAtMainCenter = hasPermission(currentUser, "reception_points.receive_cases");
   const { result, query } = useList<IncomingCase>({ resource: "incoming-reception-cases" });
   const [attachmentsByCase, setAttachmentsByCase] = useState<Record<number, CaseAttachment[]>>({});
   const [selectedCase, setSelectedCase] = useState<IncomingCase | null>(null);
@@ -103,7 +107,9 @@ export function IncomingReceptionCasesPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" asChild><Link to={`/cases/${item.id}`}><Eye /> عرض</Link></Button>
-                  <Button onClick={() => setSelectedCase(item)}><CheckCircle2 /> تم الاستلام في المركز</Button>
+                  {canReceiveAtMainCenter ? (
+                    <Button onClick={() => setSelectedCase(item)}><CheckCircle2 /> تم الاستلام في المركز</Button>
+                  ) : null}
                 </div>
               </CardHeader>
               <CardContent className="grid gap-4 lg:grid-cols-[1fr_320px]">

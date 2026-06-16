@@ -192,6 +192,17 @@ const statusLabels: Record<string, string> = {
 };
 
 const isNewCaseStatus = (status?: string | null) => ["received", "new"].includes((status || "").trim().toLowerCase());
+const isReceptionPointUser = (user: ReturnType<typeof getStoredUser>) => user?.role === "reception_point_user";
+const isMainCenterReceived = (caseData: CaseData) =>
+  caseData.transferStatus === "received_at_main_center" || Boolean(caseData.mainCenterReceivedAt);
+const isReceptionPointPreReceiptCase = (caseData: CaseData) =>
+  caseData.processingMode === "send_to_main_center" && !isMainCenterReceived(caseData);
+const canUseWorkflowActions = (details: CaseDetailsResponse, user: ReturnType<typeof getStoredUser>) =>
+  !isReceptionPointUser(user) || details.caseData.processingMode === "local_repair";
+const canManageReceptionPointIntakeCase = (details: CaseDetailsResponse, user: ReturnType<typeof getStoredUser>) =>
+  isReceptionPointUser(user) &&
+  details.caseData.sourceType === "reception_point" &&
+  isReceptionPointPreReceiptCase(details.caseData);
 
 const caseTypeLabels: Record<string, string> = {
   internal: "داخلية داخل المركز",
@@ -443,7 +454,12 @@ export function CaseDetailsPage() {
 
   const status = details?.caseData.status ?? "";
   const statusLabel = statusLabels[status] ?? status;
-  const canManageNewCase = Boolean(details && isNewCaseStatus(details.caseData.status) && hasPermission(getStoredUser(), "cases.create"));
+  const currentUser = getStoredUser();
+  const canManageNewCase = Boolean(
+    details &&
+    hasPermission(currentUser, "cases.create") &&
+    (isNewCaseStatus(details.caseData.status) || canManageReceptionPointIntakeCase(details, currentUser))
+  );
 
   return (
     <section className="space-y-6" dir="rtl">
@@ -492,6 +508,7 @@ export function CaseDetailsPage() {
 function NewCaseActions({ details, onSaved }: { details: CaseDetailsResponse; onSaved: () => Promise<void> }) {
   const navigate = useNavigate();
   const { open } = useNotification();
+  const canDeleteCase = isNewCaseStatus(details.caseData.status) || isReceptionPointPreReceiptCase(details.caseData);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -648,10 +665,12 @@ function NewCaseActions({ details, onSaved }: { details: CaseDetailsResponse; on
           <Pencil className="size-4" />
           تعديل البيانات
         </Button>
-        <Button type="button" variant="outline" size="sm" className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setIsDeleteOpen(true)}>
-          <Trash2 className="size-4" />
-          حذف الحالة
-        </Button>
+        {canDeleteCase ? (
+          <Button type="button" variant="outline" size="sm" className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setIsDeleteOpen(true)}>
+            <Trash2 className="size-4" />
+            حذف الحالة
+          </Button>
+        ) : null}
       </div>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -731,7 +750,7 @@ function NewCaseActions({ details, onSaved }: { details: CaseDetailsResponse; on
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+      <AlertDialog open={canDeleteCase && isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>حذف الحالة؟</AlertDialogTitle>
@@ -915,7 +934,7 @@ function CaseActivityTimeline({ history }: { history: CaseHistory[] }) {
 
 function WaitingPartSection({ details, onSaved }: { details: CaseDetailsResponse; onSaved: () => Promise<void> }) {
   const currentUser = getStoredUser();
-  const canEditWaitingPart = hasPermission(currentUser, "cases.diagnosis.edit");
+  const canEditWaitingPart = hasPermission(currentUser, "cases.diagnosis.edit") && canUseWorkflowActions(details, currentUser);
   const { result } = useList<InventoryItem>({ resource: "inventory" });
   const inventoryItems = result.data ?? [];
   const [selectedItemId, setSelectedItemId] = useState(details.caseData.waitingPartInventoryItemId ? String(details.caseData.waitingPartInventoryItemId) : "manual");
@@ -1023,7 +1042,7 @@ function WaitingPartSection({ details, onSaved }: { details: CaseDetailsResponse
 
 function DiagnosisInvoiceSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
   const currentUser = getStoredUser();
-  const canEditDiagnosis = hasPermission(currentUser, "cases.diagnosis.edit");
+  const canEditDiagnosis = hasPermission(currentUser, "cases.diagnosis.edit") && canUseWorkflowActions(details, currentUser);
   const canPreviewInvoice = hasPermission(currentUser, "cases.diagnosis.invoice.preview");
   const { open } = useNotification();
   const { result } = useList<InventoryItem>({ resource: "inventory" });
@@ -1495,10 +1514,11 @@ function WaitingApprovalSection({ details, parts, services, onSaved }: { details
 
 function WaitingApprovalAndHandoffSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
   const currentUser = getStoredUser();
-  const canEditDiagnosis = hasPermission(currentUser, "cases.diagnosis.edit");
-  const canApprove = hasPermission(currentUser, "cases.approval.approve");
-  const canManagePartHandoff = hasPermission(currentUser, "cases.approval.part_delivery_receive");
-  const canPrepareExecution = hasPermission(currentUser, "cases.approval.prepare_execution");
+  const canUseActions = canUseWorkflowActions(details, currentUser);
+  const canEditDiagnosis = hasPermission(currentUser, "cases.diagnosis.edit") && canUseActions;
+  const canApprove = hasPermission(currentUser, "cases.approval.approve") && canUseActions;
+  const canManagePartHandoff = hasPermission(currentUser, "cases.approval.part_delivery_receive") && canUseActions;
+  const canPrepareExecution = hasPermission(currentUser, "cases.approval.prepare_execution") && canUseActions;
   const { open } = useNotification();
   const [isEditingInvoice, setIsEditingInvoice] = useState(false);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
@@ -1815,8 +1835,9 @@ function ExecutionPreparationSection({ details, onSaved }: { details: CaseDetail
 
 function ExecutionSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
   const currentUser = getStoredUser();
-  const canPreviewExecution = hasPermission(currentUser, "cases.in_progress.execution.preview");
-  const canMarkRepaired = hasPermission(currentUser, "cases.in_progress.mark_repaired");
+  const canUseActions = canUseWorkflowActions(details, currentUser);
+  const canPreviewExecution = hasPermission(currentUser, "cases.in_progress.execution.preview") && canUseActions;
+  const canMarkRepaired = hasPermission(currentUser, "cases.in_progress.mark_repaired") && canUseActions;
   const { open } = useNotification();
   const [now, setNow] = useState(Date.now());
   const [isEditingInvoice, setIsEditingInvoice] = useState(false);
@@ -1909,8 +1930,9 @@ function ExecutionSection({ details, parts, services, onSaved }: { details: Case
 
 function ExecutionEditSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
   const currentUser = getStoredUser();
-  const canEditInvoice = hasPermission(currentUser, "cases.diagnosis.edit");
-  const canSendExecutionUpdate = hasPermission(currentUser, "cases.in_progress.execution.preview");
+  const canUseActions = canUseWorkflowActions(details, currentUser);
+  const canEditInvoice = hasPermission(currentUser, "cases.diagnosis.edit") && canUseActions;
+  const canSendExecutionUpdate = hasPermission(currentUser, "cases.in_progress.execution.preview") && canUseActions;
   const { open } = useNotification();
   const { result } = useList<InventoryItem>({ resource: "inventory" });
   const inventoryItems = result.data ?? [];
@@ -2070,7 +2092,7 @@ function ExecutionEditSection({ details, parts, services, onSaved }: { details: 
 
 function NotRepairableSection({ details, onSaved }: { details: CaseDetailsResponse; onSaved: () => Promise<void> }) {
   const currentUser = getStoredUser();
-  const canFinalizeOperation = hasPermission(currentUser, "cases.repaired.post_repair_quality.view");
+  const canFinalizeOperation = hasPermission(currentUser, "cases.repaired.post_repair_quality.view") && canUseWorkflowActions(details, currentUser);
   const navigate = useNavigate();
   const { open } = useNotification();
   const [reason, setReason] = useState(details.caseData.notRepairableReason || details.caseData.finalResult || "");
@@ -2254,10 +2276,11 @@ function NotRepairableSection({ details, onSaved }: { details: CaseDetailsRespon
 
 function RepairedSection({ details, parts, services, onSaved }: { details: CaseDetailsResponse; parts: CasePart[]; services: CaseService[]; onSaved: () => Promise<void> }) {
   const currentUser = getStoredUser();
-  const canManageQuality = hasPermission(currentUser, "cases.repaired.post_repair_quality.view");
+  const canUseActions = canUseWorkflowActions(details, currentUser);
+  const canManageQuality = hasPermission(currentUser, "cases.repaired.post_repair_quality.view") && canUseActions;
   const canPreviewInvoice = hasPermission(currentUser, "cases.repaired.invoice.preview");
-  const canSendReadyNotification = hasPermission(currentUser, "cases.repaired.ready_notification.send");
-  const canMarkCustomerReceived = hasPermission(currentUser, "cases.repaired.summary.view");
+  const canSendReadyNotification = hasPermission(currentUser, "cases.repaired.ready_notification.send") && canUseActions;
+  const canMarkCustomerReceived = hasPermission(currentUser, "cases.repaired.summary.view") && canUseActions;
   const navigate = useNavigate();
   const { open } = useNotification();
   const actualSeconds = getExecutionElapsedSeconds(details.caseData);

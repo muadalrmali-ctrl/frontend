@@ -36,12 +36,6 @@ type WorkflowColumn = {
 
 const WORKFLOW_COLUMNS: WorkflowColumn[] = [
   {
-    key: "in_transit_to_main_center",
-    label: "قيد النقل إلى المركز",
-    statuses: ["in_transit_to_main_center"],
-    targetStatus: "in_transit_to_main_center",
-  },
-  {
     key: "received",
     label: "حالة جديدة",
     statuses: ["received", "new"],
@@ -112,8 +106,12 @@ const getWorkflowStatus = (status: string) => {
   return WORKFLOW_COLUMNS.find((column) => column.statuses.includes(normalizedStatus))?.targetStatus ?? normalizedStatus;
 };
 
-const canMoveCaseFromStatus = (user: ReturnType<typeof getStoredUser>, status: string) => {
-  const workflowStatus = getWorkflowStatus(status);
+const canMoveCaseFromStatus = (user: ReturnType<typeof getStoredUser>, caseItem: CaseRecord) => {
+  if (user?.role === "reception_point_user" && caseItem.processingMode !== "local_repair") {
+    return false;
+  }
+
+  const workflowStatus = getWorkflowStatus(caseItem.status);
   const allowedTransitions = ALLOWED_BOARD_TRANSITIONS[workflowStatus] ?? [];
   return allowedTransitions.some((targetStatus) => {
     const permissionKey = STATUS_TRANSITION_PERMISSION_MAP[targetStatus];
@@ -128,6 +126,7 @@ export function CasesPage() {
   const currentUser = getStoredUser();
   const canCreateCase = hasPermission(currentUser, "cases.create");
   const canReceiveReceptionCases = hasPermission(currentUser, "reception_points.receive_cases");
+  const canViewIncomingReceptionCases = canReceiveReceptionCases || currentUser?.role === "reception_point_user";
   const [columnCollapseOverrides, setColumnCollapseOverrides] = useState<Record<string, boolean>>({});
   const [draggedCase, setDraggedCase] = useState<CaseRecord | null>(null);
   const [transitionError, setTransitionError] = useState<string | null>(null);
@@ -206,7 +205,7 @@ export function CasesPage() {
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row">
-          {canReceiveReceptionCases ? (
+          {canViewIncomingReceptionCases ? (
             <Button size="lg" variant="outline" className="w-full sm:w-auto" asChild>
               <Link to="/incoming-reception-cases">
                 <Inbox />
@@ -333,7 +332,7 @@ function WorkflowLane({
               <CaseCard
                 key={caseItem.id}
                 caseItem={caseItem}
-                draggable={canMoveCaseFromStatus(currentUser, caseItem.status)}
+                draggable={canMoveCaseFromStatus(currentUser, caseItem)}
                 onDragStart={() => onDragStart(caseItem)}
                 onDragEnd={onDragEnd}
               />

@@ -28,7 +28,7 @@ export const ROLE_LABELS: Record<AppRole, string> = {
 const LEGACY_RESOURCE_ACCESS: Record<string, AppRole[]> = {
   dashboard: ["admin", "receptionist", "technician", "store_manager", "technician_manager", "maintenance_manager", "reception_point_user"],
   cases: ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager", "reception_point_user"],
-  "maintenance-operations": ["admin", "receptionist", "technician", "technician_manager", "maintenance_manager"],
+  "maintenance-operations": ["admin", "receptionist", "technician", "technician_manager", "maintenance_manager", "reception_point_user"],
   inventory: ["admin", "store_manager"],
   sales: ["admin", "receptionist", "store_manager"],
   reports: ["admin", "receptionist", "store_manager", "technician_manager", "maintenance_manager"],
@@ -38,7 +38,7 @@ const LEGACY_RESOURCE_ACCESS: Record<string, AppRole[]> = {
   "accounting-suppliers": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
   "accounting-devices": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
   "reception-points": ["admin", "receptionist", "maintenance_manager"],
-  "incoming-reception-cases": ["admin", "receptionist", "maintenance_manager"],
+  "incoming-reception-cases": ["admin", "receptionist", "maintenance_manager", "reception_point_user"],
   "invoice-preview": ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager"],
 };
 
@@ -46,8 +46,8 @@ export const RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
   dashboard: ["dashboard.view"],
   cases: ["cases.view"],
   "reception-points": ["reception_points.view"],
-  "incoming-reception-cases": ["reception_points.receive_cases"],
-  "maintenance-operations": ["maintenance_operations.view"],
+  "incoming-reception-cases": ["reception_points.receive_cases", "cases.view"],
+  "maintenance-operations": ["maintenance_operations.view", "cases.view"],
   inventory: ["inventory.view"],
   sales: ["sales.view"],
   reports: ["reports.view"],
@@ -68,7 +68,6 @@ export const RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
 
 export const CASE_COLUMN_PERMISSION_MAP: Record<string, string> = {
   received: "cases.column.new.view",
-  in_transit_to_main_center: "cases.view",
   waiting_part: "cases.column.waiting.view",
   diagnosing: "cases.column.diagnosis.view",
   waiting_approval: "cases.column.approval_part_delivery.view",

@@ -220,16 +220,6 @@ function App() {
                 },
               },
               {
-                name: "reception-points",
-                list: "/reception-points",
-                show: "/reception-points/:id",
-                meta: {
-                  label: "نقاط الاستلام",
-                  icon: <MapPin size={16} />,
-                  roles: ["admin", "receptionist", "maintenance_manager"],
-                },
-              },
-              {
                 name: "maintenance-operations",
                 list: "/maintenance-operations",
                 show: "/maintenance-operations/:id",
@@ -325,6 +315,17 @@ function App() {
                   roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
                 },
               },
+              {
+                name: "reception-points",
+                list: "/accounting/reception-points",
+                show: "/accounting/reception-points/:id",
+                meta: {
+                  label: "نقاط الاستلام",
+                  icon: <MapPin size={16} />,
+                  parent: "accounting",
+                  roles: ["admin", "receptionist", "maintenance_manager"],
+                },
+              },
             ]}
             options={{
               syncWithLocation: true,
@@ -366,8 +367,6 @@ function App() {
                   <Route path="cases/create" element={<ProtectedAccessRoute resource="cases" requiredPermissions={["cases.create"]}><CreateCasePage /></ProtectedAccessRoute>} />
                   <Route path="cases/:id" element={<ProtectedAccessRoute resource="cases"><CaseDetailsPage /></ProtectedAccessRoute>} />
                   <Route path="incoming-reception-cases" element={<ProtectedAccessRoute resource="incoming-reception-cases"><IncomingReceptionCasesPage /></ProtectedAccessRoute>} />
-                  <Route path="reception-points" element={<ProtectedAccessRoute resource="reception-points"><ReceptionPointsPage /></ProtectedAccessRoute>} />
-                  <Route path="reception-points/:id" element={<ProtectedAccessRoute resource="reception-points"><ReceptionPointDetailsPage /></ProtectedAccessRoute>} />
                   <Route
                     path="maintenance-operations"
                     element={<ProtectedAccessRoute resource="maintenance-operations"><MaintenanceOperationsPage /></ProtectedAccessRoute>}
@@ -394,6 +393,8 @@ function App() {
                   <Route path="accounting/devices/create" element={<ProtectedAccessRoute resource="accounting-devices" requiredPermissions={["accounting.devices.manage"]}><AccountingDeviceCreatePage /></ProtectedAccessRoute>} />
                   <Route path="accounting/devices/:id" element={<ProtectedAccessRoute resource="accounting-devices"><AccountingDeviceDetailsPage /></ProtectedAccessRoute>} />
                   <Route path="accounting/devices/:id/edit" element={<ProtectedAccessRoute resource="accounting-devices" requiredPermissions={["accounting.devices.manage"]}><AccountingDeviceEditPage /></ProtectedAccessRoute>} />
+                  <Route path="accounting/reception-points" element={<ProtectedAccessRoute resource="reception-points"><ReceptionPointsPage /></ProtectedAccessRoute>} />
+                  <Route path="accounting/reception-points/:id" element={<ProtectedAccessRoute resource="reception-points"><ReceptionPointDetailsPage /></ProtectedAccessRoute>} />
                 </Route>
               </Routes>
             </Suspense>

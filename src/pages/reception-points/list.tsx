@@ -131,7 +131,7 @@ export function ReceptionPointsPage() {
               <div>
                 <CardTitle className="flex items-center gap-2 text-xl">
                   <MapPin className="size-5 text-[#415CB3]" />
-                  <Link to={`/reception-points/${point.id}`} className="hover:underline">{point.name}</Link>
+                  <Link to={`/accounting/reception-points/${point.id}`} className="hover:underline">{point.name}</Link>
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">{[point.city, point.area].filter(Boolean).join(" - ") || "غير محدد"}</p>
               </div>

@@ -20,6 +20,7 @@ import {
 } from "@/lib/case-media-upload";
 import { ApiError } from "@/providers/api-client";
 import { getStoredUser } from "@/providers/auth-provider";
+import { hasPermission } from "@/lib/access-control";
 import { cn } from "@/lib/utils";
 
 type Customer = { id: number; name: string; phone: string; address?: string | null };
@@ -36,6 +37,7 @@ type CreateCaseValues = {
   localTechnicianName: string;
   localTechnicianPhone: string;
   localRepairNotes: string;
+  receivingLocation: string;
 };
 
 type NewCustomerValues = { name: string; phone: string; address: string };
@@ -50,6 +52,7 @@ const initialValues: CreateCaseValues = {
   localTechnicianName: "",
   localTechnicianPhone: "",
   localRepairNotes: "",
+  receivingLocation: "main_center",
 };
 
 const initialCustomerValues: NewCustomerValues = { name: "", phone: "", address: "" };
@@ -90,11 +93,12 @@ export function CreateCasePage() {
   const { mutateAsync: createRecord, mutation: recordMutation } = useCreate();
   const currentUser = getStoredUser();
   const isReceptionPointUser = currentUser?.role === "reception_point_user";
+  const canCreateReceptionPointCases = hasPermission(currentUser, "reception_points.manage");
   const customersQuery = useList<Customer>({ resource: "customers" });
   const devicesQuery = useList<Device>({ resource: "devices" });
   const receptionPointsQuery = useList<ReceptionPoint>({
     resource: "reception-points",
-    queryOptions: { enabled: isReceptionPointUser },
+    queryOptions: { enabled: canCreateReceptionPointCases },
   });
   const [values, setValues] = useState<CreateCaseValues>(initialValues);
   const [newCustomer, setNewCustomer] = useState<NewCustomerValues>(initialCustomerValues);
@@ -108,7 +112,15 @@ export function CreateCasePage() {
 
   const customers = customersQuery.result.data ?? [];
   const devices = devicesQuery.result.data ?? [];
-  const activeReceptionPoint = receptionPointsQuery.result.data?.find((point) => point.id === currentUser?.receptionPointId);
+  const activeReceptionPoints = (receptionPointsQuery.result.data ?? []).filter((point) => point.status === "active");
+  const selectedReceptionPointId = values.receivingLocation.startsWith("reception_point:")
+    ? Number(values.receivingLocation.split(":")[1])
+    : null;
+  const isReceptionPointCase = Boolean(selectedReceptionPointId);
+  const activeReceptionPoint = activeReceptionPoints.find((point) => point.id === (selectedReceptionPointId ?? currentUser?.receptionPointId));
+  const lockedReceptionPointLabel = activeReceptionPoint
+    ? `${activeReceptionPoint.name}${activeReceptionPoint.city ? ` - ${activeReceptionPoint.city}` : ""}`
+    : "نقطة الاستلام الخاصة بك";
   const selectedCustomer = useMemo(
     () => customers.find((customer) => customer.id === values.selectedCustomerId),
     [customers, values.selectedCustomerId]
@@ -120,6 +132,12 @@ export function CreateCasePage() {
 
   const setField = <TKey extends keyof CreateCaseValues>(key: TKey, value: CreateCaseValues[TKey]) =>
     setValues((current) => ({ ...current, [key]: value }));
+
+  useEffect(() => {
+    if (isReceptionPointUser && currentUser?.receptionPointId) {
+      setField("receivingLocation", `reception_point:${currentUser.receptionPointId}`);
+    }
+  }, [isReceptionPointUser, currentUser?.receptionPointId]);
 
   const handleCreateCustomer = async () => {
     setError(null);
@@ -207,14 +225,14 @@ export function CreateCasePage() {
       ...intakeImages.map((file) =>
         uploadCaseImageFile({
           caseId,
-          mediaCategory: isReceptionPointUser ? "reception_point_intake" : "case_intake",
+          mediaCategory: isReceptionPointCase ? "reception_point_intake" : "case_intake",
           file,
         })
       ),
       ...intakeVideos.map((file) =>
         uploadCaseVideoFile({
           caseId,
-          mediaCategory: isReceptionPointUser ? "reception_point_intake" : "case_intake",
+          mediaCategory: isReceptionPointCase ? "reception_point_intake" : "case_intake",
           file,
         })
       ),
@@ -259,17 +277,22 @@ export function CreateCasePage() {
           deviceId: values.selectedDeviceId,
           caseType: values.caseType,
           customerComplaint: values.customerComplaint.trim(),
-          ...(isReceptionPointUser
+          ...(isReceptionPointCase
             ? {
                 sourceType: "reception_point",
-                receptionPointId: currentUser?.receptionPointId,
+                receptionPointId: selectedReceptionPointId,
                 processingMode: values.processingMode,
                 transferStatus: values.processingMode === "send_to_main_center" ? "in_transit" : "not_required",
                 localTechnicianName: values.processingMode === "local_repair" ? values.localTechnicianName.trim() || null : null,
                 localTechnicianPhone: values.processingMode === "local_repair" ? values.localTechnicianPhone.trim() || null : null,
                 localRepairNotes: values.processingMode === "local_repair" ? values.localRepairNotes.trim() || null : null,
               }
-            : {}),
+            : {
+                sourceType: "main_center",
+                receptionPointId: null,
+                processingMode: "main_center_repair",
+                transferStatus: "not_required",
+              }),
         },
       })) as { data: CreatedCase };
 
@@ -323,6 +346,40 @@ export function CreateCasePage() {
         {error ? <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
 
         <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <FormSection title="موقع الاستلام">
+            <Field label="نقطة الاستلام">
+              <Select
+                value={values.receivingLocation}
+                onValueChange={(value) => setField("receivingLocation", value)}
+                disabled={isReceptionPointUser || !canCreateReceptionPointCases}
+              >
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {!isReceptionPointUser ? <SelectItem value="main_center">المركز الرئيسي</SelectItem> : null}
+                  {isReceptionPointUser && currentUser?.receptionPointId ? (
+                    <SelectItem value={`reception_point:${currentUser.receptionPointId}`}>
+                      {lockedReceptionPointLabel}
+                    </SelectItem>
+                  ) : null}
+                  {activeReceptionPoints.map((point) => (
+                    <SelectItem key={point.id} value={`reception_point:${point.id}`}>
+                      {point.name} - {point.city}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            {isReceptionPointUser ? (
+              <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                هذه الحالة سيتم تسجيلها باسم نقطة الاستلام الخاصة بك.
+              </p>
+            ) : !canCreateReceptionPointCases ? (
+              <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                سيتم تسجيل الحالة في المركز الرئيسي.
+              </p>
+            ) : null}
+          </FormSection>
+
           <FormSection
             title="بيانات العميل"
             action={
@@ -394,7 +451,7 @@ export function CreateCasePage() {
             </Field>
           </FormSection>
 
-          {isReceptionPointUser ? (
+          {isReceptionPointCase ? (
             <FormSection title="مسار المعالجة">
               <div className="rounded-lg border bg-muted/20 p-3 text-sm text-muted-foreground">
                 نقطة الاستلام: <span className="font-bold text-foreground">{activeReceptionPoint?.name || "نقطة الاستلام الحالية"}</span>

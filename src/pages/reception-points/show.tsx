@@ -46,7 +46,7 @@ export function ReceptionPointDetailsPage() {
           <h1 className="text-3xl font-semibold">{point.name}</h1>
           <p className="text-muted-foreground">{[point.city, point.area, point.address].filter(Boolean).join(" - ")}</p>
         </div>
-        <Button variant="outline" asChild><Link to="/reception-points"><ArrowRight /> العودة</Link></Button>
+        <Button variant="outline" asChild><Link to="/accounting/reception-points"><ArrowRight /> العودة</Link></Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">

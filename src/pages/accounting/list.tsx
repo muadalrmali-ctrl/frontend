@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import type { ReactNode } from "react";
-import { Cpu, Truck, UserRound, Users } from "lucide-react";
+import { Cpu, MapPin, Truck, UserRound, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { hasPermission } from "@/lib/access-control";
@@ -12,6 +12,7 @@ export function AccountingPage() {
   const canViewTeam = hasPermission(currentUser, "accounting.team.view");
   const canViewSuppliers = hasPermission(currentUser, "accounting.suppliers.view");
   const canViewDevices = hasPermission(currentUser, "accounting.devices.view");
+  const canViewReceptionPoints = hasPermission(currentUser, "reception_points.view");
 
   return (
     <section className="space-y-6" dir="rtl">
@@ -60,6 +61,16 @@ export function AccountingPage() {
             description="مرجع الأجهزة والموديلات المسجلة داخل النظام."
             to="/accounting/devices"
             actionLabel="فتح الأجهزة"
+          />
+        ) : null}
+
+        {canViewReceptionPoints ? (
+          <AccountingSectionCard
+            icon={<MapPin className="size-5" />}
+            title="نقاط الاستلام"
+            description="إدارة نقاط الاستلام الخارجية ومتابعة الحالات المرتبطة بها."
+            to="/accounting/reception-points"
+            actionLabel="فتح نقاط الاستلام"
           />
         ) : null}
       </div>

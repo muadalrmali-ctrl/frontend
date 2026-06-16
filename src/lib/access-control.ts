@@ -68,7 +68,7 @@ export const RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
 
 export const CASE_COLUMN_PERMISSION_MAP: Record<string, string> = {
   received: "cases.column.new.view",
-  in_transit_to_main_center: "reception_points.receive_cases",
+  in_transit_to_main_center: "cases.view",
   waiting_part: "cases.column.waiting.view",
   diagnosing: "cases.column.diagnosis.view",
   waiting_approval: "cases.column.approval_part_delivery.view",

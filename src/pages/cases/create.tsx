@@ -98,7 +98,7 @@ export function CreateCasePage() {
   const devicesQuery = useList<Device>({ resource: "devices" });
   const receptionPointsQuery = useList<ReceptionPoint>({
     resource: "reception-points",
-    queryOptions: { enabled: canCreateReceptionPointCases },
+    queryOptions: { enabled: isReceptionPointUser || canCreateReceptionPointCases },
   });
   const [values, setValues] = useState<CreateCaseValues>(initialValues);
   const [newCustomer, setNewCustomer] = useState<NewCustomerValues>(initialCustomerValues);
@@ -346,40 +346,6 @@ export function CreateCasePage() {
         {error ? <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
 
         <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-          <FormSection title="موقع الاستلام">
-            <Field label="نقطة الاستلام">
-              <Select
-                value={values.receivingLocation}
-                onValueChange={(value) => setField("receivingLocation", value)}
-                disabled={isReceptionPointUser || !canCreateReceptionPointCases}
-              >
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {!isReceptionPointUser ? <SelectItem value="main_center">المركز الرئيسي</SelectItem> : null}
-                  {isReceptionPointUser && currentUser?.receptionPointId ? (
-                    <SelectItem value={`reception_point:${currentUser.receptionPointId}`}>
-                      {lockedReceptionPointLabel}
-                    </SelectItem>
-                  ) : null}
-                  {activeReceptionPoints.map((point) => (
-                    <SelectItem key={point.id} value={`reception_point:${point.id}`}>
-                      {point.name} - {point.city}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            {isReceptionPointUser ? (
-              <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-                هذه الحالة سيتم تسجيلها باسم نقطة الاستلام الخاصة بك.
-              </p>
-            ) : !canCreateReceptionPointCases ? (
-              <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-                سيتم تسجيل الحالة في المركز الرئيسي.
-              </p>
-            ) : null}
-          </FormSection>
-
           <FormSection
             title="بيانات العميل"
             action={
@@ -449,6 +415,37 @@ export function CreateCasePage() {
                 </SelectContent>
               </Select>
             </Field>
+            <Field label="موقع الاستلام">
+              <Select
+                value={values.receivingLocation}
+                onValueChange={(value) => setField("receivingLocation", value)}
+                disabled={isReceptionPointUser || !canCreateReceptionPointCases}
+              >
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {!isReceptionPointUser ? <SelectItem value="main_center">المركز الرئيسي</SelectItem> : null}
+                  {isReceptionPointUser && currentUser?.receptionPointId ? (
+                    <SelectItem value={`reception_point:${currentUser.receptionPointId}`}>
+                      {lockedReceptionPointLabel}
+                    </SelectItem>
+                  ) : null}
+                  {activeReceptionPoints.map((point) => (
+                    <SelectItem key={point.id} value={`reception_point:${point.id}`}>
+                      {point.name} - {point.city}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            {isReceptionPointUser ? (
+              <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                هذه الحالة سيتم تسجيلها باسم نقطة الاستلام الخاصة بك.
+              </p>
+            ) : !canCreateReceptionPointCases ? (
+              <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                سيتم تسجيل الحالة في المركز الرئيسي.
+              </p>
+            ) : null}
           </FormSection>
 
           {isReceptionPointCase ? (

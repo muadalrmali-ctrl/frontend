@@ -36,6 +36,12 @@ type WorkflowColumn = {
 
 const WORKFLOW_COLUMNS: WorkflowColumn[] = [
   {
+    key: "in_transit_to_main_center",
+    label: "قيد النقل إلى المركز",
+    statuses: ["in_transit_to_main_center"],
+    targetStatus: "in_transit_to_main_center",
+  },
+  {
     key: "received",
     label: "حالة جديدة",
     statuses: ["received", "new"],

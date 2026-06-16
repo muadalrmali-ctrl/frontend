@@ -46,7 +46,7 @@ export const RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
   dashboard: ["dashboard.view"],
   cases: ["cases.view"],
   "reception-points": ["reception_points.view"],
-  "incoming-reception-cases": ["reception_points.receive_cases", "cases.view"],
+  "incoming-reception-cases": ["reception_points.incoming_cases.view", "reception_points.receive_cases", "cases.view"],
   "maintenance-operations": ["maintenance_operations.view", "cases.view"],
   inventory: ["inventory.view"],
   sales: ["sales.view"],

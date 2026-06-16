@@ -194,7 +194,7 @@ function App() {
                 name: "dashboard",
                 list: "/",
                 meta: {
-                  label: "Dashboard",
+                  label: "لوحة التحكم",
                   icon: <Home size={16} />,
                   roles: ["admin", "receptionist", "technician", "store_manager", "technician_manager", "maintenance_manager", "reception_point_user"],
                 },
@@ -205,7 +205,7 @@ function App() {
                 create: "/cases/create",
                 show: "/cases/:id",
                 meta: {
-                  label: "Cases",
+                  label: "الحالات",
                   icon: <ClipboardList size={16} />,
                   roles: ["admin", "receptionist", "store_manager", "technician", "technician_manager", "maintenance_manager", "reception_point_user"],
                 },
@@ -224,7 +224,7 @@ function App() {
                 list: "/maintenance-operations",
                 show: "/maintenance-operations/:id",
                 meta: {
-                  label: "Maintenance Operations",
+                  label: "عمليات الصيانة",
                   icon: <Wrench size={16} />,
                   roles: ["admin", "receptionist", "technician", "technician_manager", "maintenance_manager", "reception_point_user"],
                 },
@@ -234,7 +234,7 @@ function App() {
                 list: "/inventory",
                 show: "/inventory/:id",
                 meta: {
-                  label: "Inventory",
+                  label: "المخزون",
                   icon: <Package size={16} />,
                   roles: ["admin", "store_manager"],
                 },
@@ -244,7 +244,7 @@ function App() {
                 list: "/sales",
                 show: "/sales/:id",
                 meta: {
-                  label: "Sales",
+                  label: "المبيعات",
                   icon: <DollarSign size={16} />,
                   roles: ["admin", "receptionist", "store_manager"],
                 },
@@ -253,7 +253,7 @@ function App() {
                 name: "reports",
                 list: "/reports",
                 meta: {
-                  label: "Reports",
+                  label: "التقارير",
                   icon: <BarChart3 size={16} />,
                   roles: ["admin", "receptionist", "store_manager", "technician_manager", "maintenance_manager"],
                 },
@@ -262,7 +262,7 @@ function App() {
                 name: "accounting",
                 list: "/accounting",
                 meta: {
-                  label: "Accounting",
+                  label: "المحاسبة",
                   icon: <Calculator size={16} />,
                   roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
                 },
@@ -272,7 +272,7 @@ function App() {
                 list: "/accounting/customers",
                 show: "/accounting/customers/:id",
                 meta: {
-                  label: "Customers",
+                  label: "العملاء",
                   icon: <UserRound size={16} />,
                   parent: "accounting",
                   roles: ["admin", "receptionist"],
@@ -283,7 +283,7 @@ function App() {
                 list: "/accounting/team",
                 show: "/accounting/team/:id",
                 meta: {
-                  label: "Team",
+                  label: "الفريق",
                   icon: <Users size={16} />,
                   parent: "accounting",
                   roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
@@ -296,7 +296,7 @@ function App() {
                 show: "/accounting/suppliers/:id",
                 edit: "/accounting/suppliers/:id/edit",
                 meta: {
-                  label: "Suppliers",
+                  label: "الموردون",
                   icon: <Truck size={16} />,
                   parent: "accounting",
                   roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
@@ -309,7 +309,7 @@ function App() {
                 show: "/accounting/devices/:id",
                 edit: "/accounting/devices/:id/edit",
                 meta: {
-                  label: "Devices",
+                  label: "الأجهزة",
                   icon: <Cpu size={16} />,
                   parent: "accounting",
                   roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],

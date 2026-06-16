@@ -1,42 +1,88 @@
 import { useCustom } from "@refinedev/core";
+import type { ReactNode } from "react";
 import {
   Activity,
   Archive,
   BadgeDollarSign,
   CircleAlert,
+  ClipboardList,
+  Clock3,
   Cpu,
+  Inbox,
   ShieldCheck,
-  Sparkles,
   UsersRound,
   Wrench,
 } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 type DashboardSummary = {
+  casesByStatus: Record<string, number>;
   totalCases: number;
-  activeCases: number;
-  completedCases: number;
+  newCases: number;
+  diagnosingCases: number;
+  waitingApprovalCases: number;
+  inProgressCases: number;
+  repairedCases: number;
+  notRepairableCases: number;
+  completedOperations: number;
+  incomingReceptionPointCases: number;
+  maintenanceOperationsCount: number;
+  inventorySummary: {
+    totalItems: number;
+    lowStockItems: number;
+    outOfStockItems: number;
+  };
+  salesSummary: {
+    totalRevenue: number;
+    totalInvoices: number;
+    pendingInvoices: number;
+  };
   totalCustomers: number;
   totalDevices: number;
-  totalInventoryItems: number;
-  lowStockItems: number;
-  totalInvoices: number;
-  pendingInvoices: number;
+  recentCases: Array<{
+    id: number;
+    caseCode: string;
+    status: string;
+    customerName: string | null;
+    deviceLabel: string | null;
+    receptionPointName: string | null;
+    createdAt: string | null;
+  }>;
+  recentActivities: Array<{
+    id: number;
+    caseId: number | null;
+    caseCode: string | null;
+    title: string;
+    actorName: string | null;
+    createdAt: string | null;
+  }>;
 };
 
-type RevenueSummary = {
-  totalRevenue: number;
+const statusLabels: Record<string, string> = {
+  received: "حالة جديدة",
+  new: "حالة جديدة",
+  waiting_part: "بانتظار قطعة",
+  diagnosis: "قيد التشخيص",
+  diagnosing: "قيد التشخيص",
+  waiting_approval: "بانتظار الموافقة",
+  in_progress: "قيد التنفيذ",
+  repaired: "تم الإصلاح",
+  not_repairable: "لا يمكن إصلاحها",
+  completed: "عملية منتهية",
+  delivered: "تم التسليم",
+  in_transit_to_main_center: "قيد النقل إلى المركز",
 };
 
-type CaseStats = Record<string, number>;
+const statusTones = [
+  "bg-emerald-50 text-emerald-700 border-emerald-100",
+  "bg-sky-50 text-sky-700 border-sky-100",
+  "bg-violet-50 text-violet-700 border-violet-100",
+  "bg-amber-50 text-amber-700 border-amber-100",
+  "bg-rose-50 text-rose-700 border-rose-100",
+];
 
 const formatCurrency = (value?: number) =>
   new Intl.NumberFormat("ar-LY", {
@@ -45,163 +91,134 @@ const formatCurrency = (value?: number) =>
     maximumFractionDigits: 0,
   }).format(value ?? 0);
 
-const STATUS_TONES = [
-  "bg-emerald-50 text-emerald-700 border-emerald-100",
-  "bg-sky-50 text-sky-700 border-sky-100",
-  "bg-violet-50 text-violet-700 border-violet-100",
-  "bg-amber-50 text-amber-700 border-amber-100",
-  "bg-rose-50 text-rose-700 border-rose-100",
-];
+const formatDate = (value?: string | null) => {
+  if (!value) return "غير متوفر";
+  return new Intl.DateTimeFormat("ar-LY", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+};
 
 export function DashboardPage() {
   const summary = useCustom<DashboardSummary>({
     url: "/api/dashboard/summary",
     method: "get",
   });
-  const revenue = useCustom<RevenueSummary>({
-    url: "/api/dashboard/revenue",
-    method: "get",
-  });
-  const caseStats = useCustom<CaseStats>({
-    url: "/api/dashboard/cases",
-    method: "get",
-  });
 
-  const isLoading =
-    summary.query.isLoading ||
-    revenue.query.isLoading ||
-    caseStats.query.isLoading;
-  const error =
-    summary.query.error || revenue.query.error || caseStats.query.error;
+  const data = summary.result?.data;
 
-  if (isLoading) {
+  if (summary.query.isLoading) {
     return (
       <section className="page-shell" dir="rtl">
         <div className="page-hero">
           <h1 className="section-title">لوحة التحكم</h1>
-          <p className="section-subtitle">جاري تحميل ملخص النشاط الحالي...</p>
+          <p className="section-subtitle">جاري تحميل بيانات النظام الحالية...</p>
         </div>
       </section>
     );
   }
 
-  if (error) {
+  if (summary.query.error || !data) {
     return (
       <section className="page-shell" dir="rtl">
         <div className="page-hero">
           <h1 className="section-title">لوحة التحكم</h1>
-          <p className="section-subtitle">تعذر تحميل البيانات الحالية.</p>
-          <p className="mt-4 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
-            {error.message}
-          </p>
+          <p className="section-subtitle">تعذر تحميل بيانات لوحة التحكم.</p>
+          {summary.query.error ? (
+            <p className="mt-4 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+              {summary.query.error.message}
+            </p>
+          ) : null}
         </div>
       </section>
     );
   }
-
-  const summaryData = summary.result?.data;
-  const revenueData = revenue.result?.data;
-  const casesData = caseStats.result?.data ?? {};
 
   const metrics = [
     {
       title: "إجمالي الحالات",
-      value: summaryData?.totalCases,
-      hint: "كل الحالات المسجلة في النظام",
+      value: data.totalCases,
+      hint: "كل الحالات المسجلة حسب صلاحيات المستخدم",
+      icon: <ClipboardList className="size-5" />,
+      tone: "bg-emerald-100 text-emerald-700",
+    },
+    {
+      title: "حالات جديدة",
+      value: data.newCases,
+      hint: "حالات لم تبدأ مرحلة التشخيص بعد",
       icon: <Wrench className="size-5" />,
-      tone: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+      tone: "bg-sky-100 text-sky-700",
     },
     {
-      title: "الحالات النشطة",
-      value: summaryData?.activeCases,
-      hint: "الحالات داخل الدورة التشغيلية",
+      title: "قيد التشخيص",
+      value: data.diagnosingCases,
+      hint: "حالات داخل مرحلة الفحص والتقدير",
       icon: <Activity className="size-5" />,
-      tone: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+      tone: "bg-violet-100 text-violet-700",
     },
     {
-      title: "الحالات المكتملة",
-      value: summaryData?.completedCases,
-      hint: "الإصلاحات التي أُغلقت بنجاح",
+      title: "بانتظار الموافقة",
+      value: data.waitingApprovalCases,
+      hint: "حالات تنتظر موافقة العميل",
+      icon: <Clock3 className="size-5" />,
+      tone: "bg-amber-100 text-amber-700",
+    },
+    {
+      title: "قيد التنفيذ",
+      value: data.inProgressCases,
+      hint: "حالات يجري العمل عليها الآن",
+      icon: <Wrench className="size-5" />,
+      tone: "bg-indigo-100 text-indigo-700",
+    },
+    {
+      title: "تم الإصلاح",
+      value: data.repairedCases,
+      hint: "حالات جاهزة أو بانتظار التسليم",
       icon: <ShieldCheck className="size-5" />,
-      tone: "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300",
+      tone: "bg-teal-100 text-teal-700",
     },
     {
-      title: "الإيرادات",
-      value: formatCurrency(revenueData?.totalRevenue),
-      hint: "الإجمالي المالي الحالي",
-      icon: <BadgeDollarSign className="size-5" />,
-      tone: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-    },
-    {
-      title: "العملاء",
-      value: summaryData?.totalCustomers,
-      hint: "العملاء النشطون في قاعدة البيانات",
-      icon: <UsersRound className="size-5" />,
-      tone: "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300",
-    },
-    {
-      title: "الأجهزة",
-      value: summaryData?.totalDevices,
-      hint: "الأجهزة المرتبطة بالحالات والعملاء",
-      icon: <Cpu className="size-5" />,
-      tone: "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300",
-    },
-    {
-      title: "أصناف المخزون",
-      value: summaryData?.totalInventoryItems,
-      hint: "عدد العناصر المتاحة في المخزون",
-      icon: <Archive className="size-5" />,
-      tone: "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300",
-    },
-    {
-      title: "المخزون المنخفض",
-      value: summaryData?.lowStockItems,
-      hint: "عناصر تحتاج متابعة وشراء",
+      title: "لا يمكن إصلاحها",
+      value: data.notRepairableCases,
+      hint: "حالات انتهت بعدم إمكانية الإصلاح",
       icon: <CircleAlert className="size-5" />,
-      tone: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
+      tone: "bg-rose-100 text-rose-700",
     },
+    {
+      title: "استلام نقاط الاستلام",
+      value: data.incomingReceptionPointCases,
+      hint: "حالات مرسلة للمركز ولم تستلم بعد",
+      icon: <Inbox className="size-5" />,
+      tone: "bg-lime-100 text-lime-700",
+    },
+  ];
+
+  const quickStats = [
+    { title: "عمليات الصيانة", value: data.maintenanceOperationsCount, icon: <Wrench className="size-4" /> },
+    { title: "العمليات المنتهية", value: data.completedOperations, icon: <ShieldCheck className="size-4" /> },
+    { title: "العملاء", value: data.totalCustomers, icon: <UsersRound className="size-4" /> },
+    { title: "الأجهزة", value: data.totalDevices, icon: <Cpu className="size-4" /> },
+    { title: "أصناف المخزون", value: data.inventorySummary.totalItems, icon: <Archive className="size-4" /> },
+    { title: "مخزون منخفض", value: data.inventorySummary.lowStockItems, icon: <CircleAlert className="size-4" /> },
+    { title: "فواتير معلقة", value: data.salesSummary.pendingInvoices, icon: <BadgeDollarSign className="size-4" /> },
+    { title: "إجمالي الإيراد", value: formatCurrency(data.salesSummary.totalRevenue), icon: <BadgeDollarSign className="size-4" /> },
   ];
 
   return (
     <section className="page-shell" dir="rtl">
       <div className="page-hero">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <Badge className="brand-chip mb-4 border-0 shadow-none">
-              <Sparkles className="size-3.5" />
-              مركز القيادة اليومي
-            </Badge>
+            <Badge className="brand-chip mb-4 border-0 shadow-none">بيانات مباشرة</Badge>
             <h1 className="section-title">لوحة التحكم</h1>
             <p className="section-subtitle">
-              نظرة تنفيذية سريعة على الحالات والمبيعات والمخزون حتى تكون المتابعة
-              أوضح وأسرع خلال اليوم.
+              ملخص حي للحالات والاستلام والمخزون والمبيعات حسب صلاحيات المستخدم الحالية.
             </p>
           </div>
-
           <div className="grid gap-3 sm:grid-cols-3 xl:min-w-[430px]">
-            <MiniPulseCard
-              title="فواتير معلقة"
-              value={summaryData?.pendingInvoices ?? 0}
-              tone="text-amber-700 dark:text-amber-300"
-            />
-            <MiniPulseCard
-              title="إجمالي الفواتير"
-              value={summaryData?.totalInvoices ?? 0}
-              tone="text-sky-700 dark:text-sky-300"
-            />
-            <MiniPulseCard
-              title="معدل الإغلاق"
-              value={
-                summaryData?.totalCases
-                  ? `${Math.round(
-                      ((summaryData.completedCases ?? 0) /
-                        summaryData.totalCases) *
-                        100
-                    )}%`
-                  : "0%"
-              }
-              tone="text-emerald-700 dark:text-emerald-300"
-            />
+            <MiniStat title="إجمالي الفواتير" value={data.salesSummary.totalInvoices} />
+            <MiniStat title="منخفض المخزون" value={data.inventorySummary.lowStockItems} />
+            <MiniStat title="نفد من المخزون" value={data.inventorySummary.outOfStockItems} />
           </div>
         </div>
       </div>
@@ -212,51 +229,27 @@ export function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.5fr_0.9fr]">
-        <Card className="overflow-hidden">
+      <div className="grid gap-5 xl:grid-cols-[1.3fr_0.9fr]">
+        <Card>
           <CardHeader className="border-b border-border/60">
-            <CardTitle className="text-2xl">توزيع الحالات حسب الحالة</CardTitle>
-            <CardDescription>
-              قراءة بصرية سريعة لحركة سير العمل الحالية.
-            </CardDescription>
+            <CardTitle className="text-2xl">توزيع الحالات</CardTitle>
+            <CardDescription>الأرقام المعروضة تأتي من قاعدة البيانات الحالية.</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            {Object.keys(casesData).length === 0 ? (
-              <div className="empty-state">
-                <p className="text-sm text-muted-foreground">لا توجد بيانات حالات بعد.</p>
-              </div>
+            {Object.keys(data.casesByStatus).length === 0 ? (
+              <EmptyState message="لا توجد حالات مسجلة بعد." />
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {Object.entries(casesData).map(([status, count], index) => (
-                  <div
-                    key={status}
-                    className={cn(
-                      "rounded-[1.2rem] border px-4 py-4",
-                      STATUS_TONES[index % STATUS_TONES.length]
-                    )}
-                  >
+                {Object.entries(data.casesByStatus).map(([status, count], index) => (
+                  <div key={status} className={cn("rounded-lg border px-4 py-4", statusTones[index % statusTones.length])}>
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-black capitalize">
-                        {status.replaceAll("_", " ")}
-                      </span>
-                      <span className="rounded-full bg-white px-3 py-1 text-sm font-black text-foreground shadow-2xs">
-                        {String(count)}
-                      </span>
+                      <span className="text-sm font-bold">{statusLabels[status] ?? status.replaceAll("_", " ")}</span>
+                      <span className="rounded-full bg-white px-3 py-1 text-sm font-black text-foreground shadow-2xs">{count}</span>
                     </div>
-                    <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/80">
+                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/80">
                       <div
                         className="h-full rounded-full bg-current opacity-75"
-                        style={{
-                          width: `${Math.max(
-                            18,
-                            Math.min(
-                              100,
-                              summaryData?.totalCases
-                                ? (count / summaryData.totalCases) * 100
-                                : 25
-                            )
-                          )}%`,
-                        }}
+                        style={{ width: `${data.totalCases ? Math.max(10, (count / data.totalCases) * 100) : 0}%` }}
                       />
                     </div>
                   </div>
@@ -269,31 +262,59 @@ export function DashboardPage() {
         <Card>
           <CardHeader className="border-b border-border/60">
             <CardTitle className="text-2xl">مؤشرات سريعة</CardTitle>
-            <CardDescription>
-              نقاط تركيز يومية للفريق والإدارة.
-            </CardDescription>
+            <CardDescription>ملخصات تشغيلية من البيانات الفعلية.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 pt-6">
-            <QuickInsight
-              title="الحالات النشطة مقابل المكتملة"
-              value={`${summaryData?.activeCases ?? 0} / ${summaryData?.completedCases ?? 0}`}
-              tone="info"
-            />
-            <QuickInsight
-              title="تنبيه مخزون"
-              value={`${summaryData?.lowStockItems ?? 0} عنصر`}
-              tone="warning"
-            />
-            <QuickInsight
-              title="قيمة الإيراد"
-              value={formatCurrency(revenueData?.totalRevenue)}
-              tone="success"
-            />
-            <QuickInsight
-              title="كثافة العملاء"
-              value={`${summaryData?.totalCustomers ?? 0} عميل`}
-              tone="violet"
-            />
+          <CardContent className="grid gap-3 pt-6">
+            {quickStats.map((item) => (
+              <div key={item.title} className="flex items-center justify-between rounded-lg border bg-background px-4 py-3">
+                <div className="flex items-center gap-2 text-sm font-bold">
+                  {item.icon}
+                  {item.title}
+                </div>
+                <Badge variant="outline">{item.value}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Card>
+          <CardHeader className="border-b border-border/60">
+            <CardTitle className="text-2xl">أحدث الحالات</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 pt-6">
+            {data.recentCases.length ? data.recentCases.map((caseItem) => (
+              <Link key={caseItem.id} to={`/cases/${caseItem.id}`} className="rounded-lg border bg-background p-4 transition hover:border-primary/40">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-bold">{caseItem.caseCode}</span>
+                  <Badge variant="secondary">{statusLabels[caseItem.status] ?? caseItem.status}</Badge>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {[caseItem.customerName, caseItem.deviceLabel, caseItem.receptionPointName].filter(Boolean).join(" • ") || "بيانات غير مكتملة"}
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">{formatDate(caseItem.createdAt)}</p>
+              </Link>
+            )) : <EmptyState message="لا توجد حالات حديثة." />}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="border-b border-border/60">
+            <CardTitle className="text-2xl">آخر النشاطات</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-3 pt-6">
+            {data.recentActivities.length ? data.recentActivities.map((activity) => (
+              <div key={activity.id} className="rounded-lg border bg-background p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-bold">{activity.title}</p>
+                  {activity.caseId ? <Badge variant="outline">{activity.caseCode}</Badge> : null}
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {[activity.actorName, formatDate(activity.createdAt)].filter(Boolean).join(" • ")}
+                </p>
+              </div>
+            )) : <EmptyState message="لا توجد نشاطات حديثة." />}
           </CardContent>
         </Card>
       </div>
@@ -309,74 +330,34 @@ function MetricCard({
   tone,
 }: {
   title: string;
-  value?: number | string;
+  value: number | string;
   hint: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   tone: string;
 }) {
   return (
-    <Card className="overflow-hidden">
+    <Card>
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4">
-          <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl", tone)}>
-            {icon}
-          </div>
-          <Badge variant="outline" className="border-border/70 bg-background/70">
-            مباشر
-          </Badge>
+          <div className={cn("flex h-12 w-12 items-center justify-center rounded-lg", tone)}>{icon}</div>
         </div>
         <p className="mt-5 text-sm font-bold text-muted-foreground">{title}</p>
-        <h3 className="mt-2 text-3xl font-black tracking-tight text-foreground">
-          {value ?? 0}
-        </h3>
+        <h3 className="mt-2 text-3xl font-black tracking-tight text-foreground">{value}</h3>
         <p className="mt-2 text-xs leading-6 text-muted-foreground">{hint}</p>
       </CardContent>
     </Card>
   );
 }
 
-function MiniPulseCard({
-  title,
-  value,
-  tone,
-}: {
-  title: string;
-  value: string | number;
-  tone: string;
-}) {
+function MiniStat({ title, value }: { title: string; value: string | number }) {
   return (
-    <div className="rounded-[1.2rem] border border-border bg-card px-4 py-4 shadow-2xs">
+    <div className="rounded-lg border border-border bg-card px-4 py-4 shadow-2xs">
       <p className="text-xs font-bold text-muted-foreground">{title}</p>
-      <div className={cn("mt-3 text-2xl font-black tracking-tight", tone)}>{value}</div>
+      <div className="mt-3 text-2xl font-black tracking-tight">{value}</div>
     </div>
   );
 }
 
-function QuickInsight({
-  title,
-  value,
-  tone,
-}: {
-  title: string;
-  value: string;
-  tone: "success" | "warning" | "info" | "violet";
-}) {
-  const badgeVariant =
-    tone === "success"
-      ? "success"
-      : tone === "warning"
-        ? "warning"
-        : tone === "violet"
-          ? "violet"
-          : "info";
-
-  return (
-    <div className="flex items-center justify-between rounded-[1.1rem] border border-border bg-background px-4 py-4">
-      <div className="space-y-1">
-        <p className="text-sm font-bold text-foreground">{title}</p>
-        <p className="text-xs text-muted-foreground">مقروءة مباشرة من البيانات الحالية</p>
-      </div>
-      <Badge variant={badgeVariant}>{value}</Badge>
-    </div>
-  );
+function EmptyState({ message }: { message: string }) {
+  return <p className="rounded-lg border bg-muted/10 p-4 text-sm text-muted-foreground">{message}</p>;
 }

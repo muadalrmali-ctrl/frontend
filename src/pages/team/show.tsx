@@ -1,14 +1,17 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useNotification, useOne } from "@refinedev/core";
-import { ArrowRight, CheckCircle2, Clock3, Package, Phone, Save, ShieldCheck, UserRound, Wrench } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock3, Copy, KeyRound, Package, Phone, Save, ShieldCheck, UserRound, Wrench } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Badge } from "@/components/ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ROLE_LABELS } from "@/lib/access-control";
+import { ROLE_LABELS, hasPermission } from "@/lib/access-control";
 import { apiClient } from "@/providers/api-client";
 import { getStoredUser } from "@/providers/auth-provider";
 
@@ -120,6 +123,17 @@ type TeamMemberPermissions = {
   permissions: string[];
 };
 
+type PasswordResetResponse = {
+  emailSent: boolean;
+  resetLink?: string;
+  expiresAt: string;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+  };
+};
+
 const PERMISSION_GROUP_LABELS: Record<string, string> = {
   dashboard: "لوحة التحكم",
   cases: "الحالات",
@@ -171,6 +185,7 @@ export function TeamMemberDetailsPage() {
   const { open } = useNotification();
   const currentUser = getStoredUser();
   const canManagePermissions = currentUser?.role === "admin";
+  const canResetPassword = hasPermission(currentUser, "reset_user_password");
   const memberId = Number(id);
   const { result, query } = useOne<TeamMemberDetails>({
     resource: "accounting-team",
@@ -185,6 +200,10 @@ export function TeamMemberDetailsPage() {
   const [isSavingPermissions, setIsSavingPermissions] = useState(false);
   const [permissionsError, setPermissionsError] = useState<string | null>(null);
   const [permissionPayload, setPermissionPayload] = useState<TeamMemberPermissions | null>(null);
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [isResetLinkDialogOpen, setIsResetLinkDialogOpen] = useState(false);
+  const [isCreatingResetLink, setIsCreatingResetLink] = useState(false);
+  const [passwordResetResult, setPasswordResetResult] = useState<PasswordResetResponse | null>(null);
 
   useEffect(() => {
     if (!canManagePermissions || !Number.isFinite(memberId)) {
@@ -294,6 +313,50 @@ export function TeamMemberDetailsPage() {
     }
   };
 
+  const createPasswordResetLink = async () => {
+    setIsCreatingResetLink(true);
+
+    try {
+      const result = await apiClient<PasswordResetResponse>(`/api/auth/team/${memberId}/password-reset`, {
+        method: "POST",
+      });
+      setPasswordResetResult(result);
+      setIsResetDialogOpen(false);
+
+      if (result.emailSent) {
+        open?.({
+          type: "success",
+          message: "تم إرسال رابط إعادة التعيين",
+          description: `تم إرسال الرابط إلى ${result.user.email}.`,
+        });
+      } else {
+        setIsResetLinkDialogOpen(true);
+        open?.({
+          type: "success",
+          message: "تم إنشاء رابط إعادة التعيين",
+          description: "لم يتم إعداد إرسال البريد، يمكنك نسخ الرابط وإرساله يدويًا.",
+        });
+      }
+    } catch (error) {
+      open?.({
+        type: "error",
+        message: "تعذر إنشاء رابط إعادة التعيين",
+        description: error instanceof Error ? error.message : undefined,
+      });
+    } finally {
+      setIsCreatingResetLink(false);
+    }
+  };
+
+  const copyResetLink = async () => {
+    if (!passwordResetResult?.resetLink) return;
+    await navigator.clipboard?.writeText(passwordResetResult.resetLink);
+    open?.({
+      type: "success",
+      message: "تم نسخ رابط إعادة التعيين",
+    });
+  };
+
   return (
     <section className="space-y-6" dir="rtl">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -313,10 +376,58 @@ export function TeamMemberDetailsPage() {
               <p className="text-muted-foreground">
                 صفحة تفصيلية لعرض بيانات عضو الفريق والأقسام المرتبطة بدوره داخل مركز الصيانة.
               </p>
+              {details && canResetPassword ? (
+                <Button type="button" variant="outline" className="w-fit" onClick={() => setIsResetDialogOpen(true)}>
+                  <KeyRound className="size-4" />
+                  إرسال رابط إعادة تعيين كلمة المرور
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
       </div>
+
+      <AlertDialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>إعادة تعيين كلمة المرور؟</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل تريد إنشاء رابط إعادة تعيين كلمة المرور لهذا المستخدم؟ سيكون الرابط صالحًا لمدة ساعة واحدة ولا يمكن استخدامه إلا مرة واحدة.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCreatingResetLink}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={createPasswordResetLink} disabled={isCreatingResetLink}>
+              {isCreatingResetLink ? "جارٍ الإنشاء..." : "إنشاء الرابط"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={isResetLinkDialogOpen} onOpenChange={setIsResetLinkDialogOpen}>
+        <DialogContent dir="rtl" className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>رابط إعادة التعيين</DialogTitle>
+            <DialogDescription>
+              لم يتم العثور على خدمة بريد مفعلة، انسخ الرابط وأرسله للمستخدم يدويًا. لا ترسل كلمة مرور مباشرة.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <label className="text-sm font-medium">رابط إعادة التعيين</label>
+            <Input dir="ltr" readOnly value={passwordResetResult?.resetLink ?? ""} />
+            <p className="text-xs text-muted-foreground">
+              ينتهي الرابط في: {formatDate(passwordResetResult?.expiresAt)}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsResetLinkDialogOpen(false)}>إغلاق</Button>
+            <Button type="button" onClick={copyResetLink} disabled={!passwordResetResult?.resetLink}>
+              <Copy className="size-4" />
+              نسخ الرابط
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {query.isLoading ? <p className="text-muted-foreground">جارٍ تحميل بيانات عضو الفريق...</p> : null}
       {query.error ? <p className="text-sm text-destructive">{query.error.message}</p> : null}

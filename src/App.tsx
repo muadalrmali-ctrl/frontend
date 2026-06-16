@@ -130,6 +130,9 @@ const AccountingDeviceEditPage = lazy(() =>
 const LoginPage = lazy(() =>
   import("./pages/login").then((module) => ({ default: module.LoginPage }))
 );
+const ResetPasswordPage = lazy(() =>
+  import("./pages/reset-password").then((module) => ({ default: module.ResetPasswordPage }))
+);
 const AcceptInvitationPage = lazy(() =>
   import("./pages/accept-invitation").then((module) => ({ default: module.AcceptInvitationPage }))
 );
@@ -343,6 +346,7 @@ function App() {
                     </Authenticated>
                   }
                 />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
                 <Route path="/invite/:token" element={<AcceptInvitationPage />} />
                 <Route

@@ -1,5 +1,6 @@
 import { UserAvatar } from "@/components/refine-ui/layout/user-avatar";
 import { ThemeToggle } from "@/components/refine-ui/theme/theme-toggle";
+import { APP_ARABIC_SUBTITLE } from "@/components/brand-logo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +33,7 @@ function DesktopHeader() {
         </div>
         <div>
           <h2 className="text-base font-black text-foreground">{title.text}</h2>
-          <p className="text-xs text-muted-foreground">نظام إدارة مركز الصيانة</p>
+          <p className="text-xs text-muted-foreground">{APP_ARABIC_SUBTITLE}</p>
         </div>
       </div>
 

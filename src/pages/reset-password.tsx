@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { ArrowRight, ShieldCheck, Wrench } from "lucide-react";
+import { ArrowRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InputPassword } from "@/components/refine-ui/form/input-password";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { ThemeProvider } from "@/components/refine-ui/theme/theme-provider";
 import { ThemeToggle } from "@/components/refine-ui/theme/theme-toggle";
 import { apiClient } from "@/providers/api-client";
+import { APP_ARABIC_SUBTITLE, APP_NAME, BrandMark } from "@/components/brand-logo";
 
 type ResetTokenDetails = {
   user: {
@@ -100,12 +101,13 @@ export function ResetPasswordPage() {
 
         <Card className="mx-auto w-full max-w-[480px]">
           <CardHeader>
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Wrench size={22} />
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 p-2">
+              <BrandMark />
             </div>
+            <p className="text-sm font-semibold text-primary">{APP_NAME}</p>
             <CardTitle className="text-3xl">إعادة تعيين كلمة المرور</CardTitle>
             <CardDescription>
-              أدخل كلمة مرور جديدة لحسابك في نظام مركز الصيانة.
+              {APP_ARABIC_SUBTITLE}
             </CardDescription>
           </CardHeader>
           <CardContent>

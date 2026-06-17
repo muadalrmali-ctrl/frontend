@@ -24,6 +24,7 @@ import {
 import "./App.css";
 import { Toaster } from "./components/refine-ui/notification/toaster";
 import { useNotificationProvider } from "./components/refine-ui/notification/use-notification-provider";
+import { APP_NAME, BrandMark } from "./components/brand-logo";
 import { dataProvider } from "./providers/data";
 import { authProvider, getStoredUser } from "./providers/auth-provider";
 import { canAccessResource, getDefaultRouteForUser, hasAnyPermission } from "./lib/access-control";
@@ -305,6 +306,10 @@ function App() {
               },
             ]}
             options={{
+              title: {
+                text: APP_NAME,
+                icon: <BrandMark />,
+              },
               syncWithLocation: true,
               warnWhenUnsavedChanges: true,
               projectId: "8VaUyH-oJVueN-Hv1pe3",

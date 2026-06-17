@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { ThemeProvider } from "@/components/refine-ui/theme/theme-provider";
 import { ThemeToggle } from "@/components/refine-ui/theme/theme-toggle";
 import { Badge } from "@/components/ui/badge";
+import { APP_ARABIC_SUBTITLE, APP_NAME, BrandLockup, BrandMark } from "@/components/brand-logo";
 
 export function LoginPage() {
   const { mutateAsync: login, isPending } = useLogin();
@@ -51,8 +52,9 @@ export function LoginPage() {
           <div className="page-hero hidden min-h-[560px] lg:flex lg:flex-col lg:justify-between">
             <div>
               <Badge className="brand-chip mb-4 border-0 shadow-none">
-                Maintenance Center
+                {APP_NAME}
               </Badge>
+              <BrandLockup className="mb-6 max-w-md" />
               <h1 className="section-title max-w-2xl">
                 واجهة أخف وأوضح لإدارة الحالات والمخزون والمبيعات.
               </h1>
@@ -78,12 +80,13 @@ export function LoginPage() {
 
           <Card className="mx-auto w-full max-w-[460px] self-center">
             <CardHeader className="pb-2">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Wrench size={22} />
+              <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 p-2">
+                <BrandMark />
               </div>
+              <p className="text-sm font-semibold text-primary">{APP_NAME}</p>
               <CardTitle className="text-3xl">تسجيل الدخول</CardTitle>
               <CardDescription>
-                ادخل إلى النظام لمتابعة الحالات والمخزون والمبيعات.
+                {APP_ARABIC_SUBTITLE}
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-4">

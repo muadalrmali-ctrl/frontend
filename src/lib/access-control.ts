@@ -35,7 +35,6 @@ const LEGACY_RESOURCE_ACCESS: Record<string, AppRole[]> = {
   accounting: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
   "accounting-customers": ["admin", "receptionist"],
   "accounting-team": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
-  "accounting-suppliers": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
   "accounting-devices": ["admin", "receptionist", "technician_manager", "maintenance_manager"],
   "reception-points": ["admin", "receptionist", "maintenance_manager"],
   "incoming-reception-cases": ["admin", "receptionist", "maintenance_manager", "reception_point_user"],
@@ -54,7 +53,6 @@ export const RESOURCE_PERMISSION_MAP: Record<string, string[]> = {
   accounting: ["accounting.view"],
   "accounting-customers": ["accounting.customers.view"],
   "accounting-team": ["accounting.team.view"],
-  "accounting-suppliers": ["accounting.suppliers.view"],
   "accounting-devices": ["accounting.devices.view"],
   "invoice-preview": [
     "cases.diagnosis.invoice.preview",

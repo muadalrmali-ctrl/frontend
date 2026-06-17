@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
-import { useNotification, useOne } from "@refinedev/core";
-import { ArrowRight, CheckCircle2, Clock3, Copy, KeyRound, Package, Phone, Save, ShieldCheck, UserRound, Wrench } from "lucide-react";
+import { useList, useNotification, useOne } from "@refinedev/core";
+import { ArrowRight, CheckCircle2, Clock3, Copy, Edit, KeyRound, Package, Phone, Save, ShieldCheck, Trash2, UserRound, Wrench } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -9,8 +9,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { ROLE_LABELS, hasPermission } from "@/lib/access-control";
 import { apiClient } from "@/providers/api-client";
 import { getStoredUser } from "@/providers/auth-provider";
@@ -23,6 +26,7 @@ type TeamMemberDetails = {
     role: string;
     phone?: string | null;
     status: string;
+    receptionPointId?: number | null;
     joinDate?: string | null;
     specialty?: string | null;
     profilePhotoUrl?: string | null;
@@ -134,6 +138,33 @@ type PasswordResetResponse = {
   };
 };
 
+type ReceptionPoint = {
+  id: number;
+  name: string;
+  city: string;
+  status: string;
+};
+
+type TeamMemberEditForm = {
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  status: string;
+  receptionPointId: string;
+  notes: string;
+};
+
+const TEAM_ROLE_OPTIONS = [
+  "admin",
+  "receptionist",
+  "technician",
+  "store_manager",
+  "technician_manager",
+  "maintenance_manager",
+  "reception_point_user",
+] as const;
+
 const PERMISSION_GROUP_LABELS: Record<string, string> = {
   dashboard: "لوحة التحكم",
   cases: "الحالات",
@@ -186,12 +217,20 @@ export function TeamMemberDetailsPage() {
   const currentUser = getStoredUser();
   const canManagePermissions = currentUser?.role === "admin";
   const canResetPassword = hasPermission(currentUser, "reset_user_password");
+  const canEditTeamMember = hasPermission(currentUser, "edit_team_member");
+  const canDeleteTeamMember = hasPermission(currentUser, "delete_team_member");
   const memberId = Number(id);
   const { result, query } = useOne<TeamMemberDetails>({
     resource: "accounting-team",
     id: memberId,
     queryOptions: {
       enabled: Number.isFinite(memberId),
+    },
+  });
+  const receptionPointsQuery = useList<ReceptionPoint>({
+    resource: "reception-points",
+    queryOptions: {
+      enabled: canEditTeamMember,
     },
   });
   const [catalog, setCatalog] = useState<PermissionCatalogItem[]>([]);
@@ -204,6 +243,32 @@ export function TeamMemberDetailsPage() {
   const [isResetLinkDialogOpen, setIsResetLinkDialogOpen] = useState(false);
   const [isCreatingResetLink, setIsCreatingResetLink] = useState(false);
   const [passwordResetResult, setPasswordResetResult] = useState<PasswordResetResponse | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isSavingMember, setIsSavingMember] = useState(false);
+  const [isDeletingMember, setIsDeletingMember] = useState(false);
+  const [editForm, setEditForm] = useState<TeamMemberEditForm>({
+    name: "",
+    email: "",
+    phone: "",
+    role: "technician",
+    status: "active",
+    receptionPointId: "none",
+    notes: "",
+  });
+
+  useEffect(() => {
+    if (!result?.user) return;
+    setEditForm({
+      name: result.user.name || "",
+      email: result.user.email || "",
+      phone: result.user.phone || "",
+      role: result.user.role || "technician",
+      status: result.user.status || "active",
+      receptionPointId: result.user.receptionPointId ? String(result.user.receptionPointId) : "none",
+      notes: "",
+    });
+  }, [result]);
 
   useEffect(() => {
     if (!canManagePermissions || !Number.isFinite(memberId)) {
@@ -357,6 +422,63 @@ export function TeamMemberDetailsPage() {
     });
   };
 
+  const saveTeamMember = async () => {
+    setIsSavingMember(true);
+
+    try {
+      await apiClient(`/api/auth/team/${memberId}`, {
+        method: "PATCH",
+        body: {
+          name: editForm.name,
+          email: editForm.email,
+          phone: editForm.phone || null,
+          role: editForm.role,
+          status: editForm.status,
+          receptionPointId: editForm.receptionPointId === "none" ? null : Number(editForm.receptionPointId),
+        },
+      });
+      await query.refetch();
+      setIsEditDialogOpen(false);
+      open?.({
+        type: "success",
+        message: "تم تعديل البيانات",
+        description: "تم تحديث بيانات عضو الفريق بنجاح.",
+      });
+    } catch (error) {
+      open?.({
+        type: "error",
+        message: "تعذر تعديل البيانات",
+        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
+      });
+    } finally {
+      setIsSavingMember(false);
+    }
+  };
+
+  const deleteTeamMember = async () => {
+    setIsDeletingMember(true);
+
+    try {
+      await apiClient(`/api/auth/team/${memberId}`, {
+        method: "DELETE",
+      });
+      open?.({
+        type: "success",
+        message: "تم حذف العضو",
+        description: "تم تعطيل حساب العضو مع الحفاظ على السجلات التاريخية.",
+      });
+      navigate("/accounting/team");
+    } catch (error) {
+      open?.({
+        type: "error",
+        message: "تعذر حذف العضو",
+        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
+      });
+    } finally {
+      setIsDeletingMember(false);
+    }
+  };
+
   return (
     <section className="space-y-6" dir="rtl">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
@@ -381,6 +503,22 @@ export function TeamMemberDetailsPage() {
                   <KeyRound className="size-4" />
                   إرسال رابط إعادة تعيين كلمة المرور
                 </Button>
+              ) : null}
+              {details ? (
+                <div className="flex flex-wrap gap-2">
+                  {canEditTeamMember ? (
+                    <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(true)}>
+                      <Edit className="size-4" />
+                      تعديل البيانات
+                    </Button>
+                  ) : null}
+                  {canDeleteTeamMember && currentUser?.id !== memberId ? (
+                    <Button type="button" variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
+                      <Trash2 className="size-4" />
+                      حذف العضو
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </div>
@@ -428,6 +566,98 @@ export function TeamMemberDetailsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent dir="rtl" className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>تعديل بيانات العضو</DialogTitle>
+            <DialogDescription>
+              حدّث بيانات عضو الفريق دون تعديل كلمة المرور من هذه الصفحة.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="الاسم">
+              <Input value={editForm.name} onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))} />
+            </Field>
+            <Field label="البريد الإلكتروني">
+              <Input dir="ltr" type="email" value={editForm.email} onChange={(event) => setEditForm((current) => ({ ...current, email: event.target.value }))} />
+            </Field>
+            <Field label="الهاتف">
+              <Input dir="ltr" value={editForm.phone} onChange={(event) => setEditForm((current) => ({ ...current, phone: event.target.value }))} />
+            </Field>
+            <Field label="الدور">
+              <Select value={editForm.role} onValueChange={(value) => setEditForm((current) => ({ ...current, role: value }))}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="اختر الدور" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TEAM_ROLE_OPTIONS.map((roleOption) => (
+                    <SelectItem key={roleOption} value={roleOption}>
+                      {ROLE_LABELS[roleOption] ?? roleOption}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="الحالة">
+              <Select value={editForm.status} onValueChange={(value) => setEditForm((current) => ({ ...current, status: value }))}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="اختر الحالة" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">نشط</SelectItem>
+                  <SelectItem value="inactive">غير نشط</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="نقطة الاستلام">
+              <Select value={editForm.receptionPointId} onValueChange={(value) => setEditForm((current) => ({ ...current, receptionPointId: value }))}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="بدون نقطة استلام" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">بدون نقطة استلام</SelectItem>
+                  {(receptionPointsQuery.result.data ?? []).map((point) => (
+                    <SelectItem key={point.id} value={String(point.id)}>
+                      {point.name} - {point.city}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <div className="md:col-span-2">
+              <Field label="ملاحظات">
+                <Textarea value={editForm.notes} onChange={(event) => setEditForm((current) => ({ ...current, notes: event.target.value }))} placeholder="غير محفوظة حالياً في بيانات العضو" />
+              </Field>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={isSavingMember}>
+              إلغاء
+            </Button>
+            <Button type="button" onClick={saveTeamMember} disabled={isSavingMember}>
+              {isSavingMember ? "جارٍ الحفظ..." : "حفظ التعديلات"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف العضو</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف هذا العضو؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingMember}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteTeamMember} disabled={isDeletingMember} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isDeletingMember ? "جارٍ الحذف..." : "تأكيد الحذف"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {query.isLoading ? <p className="text-muted-foreground">جارٍ تحميل بيانات عضو الفريق...</p> : null}
       {query.error ? <p className="text-sm text-destructive">{query.error.message}</p> : null}
@@ -882,6 +1112,15 @@ function Info({ label, value, icon }: { label: string; value: string; icon?: Rea
         <span>{label}</span>
       </div>
       <p className="mt-1 font-medium">{value}</p>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid gap-2">
+      <Label>{label}</Label>
+      {children}
     </div>
   );
 }

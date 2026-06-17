@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import type { ReactNode } from "react";
-import { Cpu, MapPin, Truck, UserRound, Users } from "lucide-react";
+import { Cpu, MapPin, UserRound, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { hasPermission } from "@/lib/access-control";
@@ -10,7 +10,6 @@ export function AccountingPage() {
   const currentUser = getStoredUser();
   const canViewCustomers = hasPermission(currentUser, "accounting.customers.view");
   const canViewTeam = hasPermission(currentUser, "accounting.team.view");
-  const canViewSuppliers = hasPermission(currentUser, "accounting.suppliers.view");
   const canViewDevices = hasPermission(currentUser, "accounting.devices.view");
   const canViewReceptionPoints = hasPermission(currentUser, "reception_points.view");
 
@@ -19,7 +18,7 @@ export function AccountingPage() {
       <div>
         <h1 className="text-3xl font-semibold">المحاسبة</h1>
         <p className="text-muted-foreground">
-          إدارة العملاء والفريق والموردين والأجهزة المرتبطة بسير عمل الصيانة.
+          إدارة العملاء والفريق والأجهزة ونقاط الاستلام المرتبطة بسير عمل الصيانة.
         </p>
       </div>
 
@@ -41,16 +40,6 @@ export function AccountingPage() {
             description="إدارة أعضاء الفريق والدعوات وصلاحيات الوصول."
             to="/accounting/team"
             actionLabel="فتح الفريق"
-          />
-        ) : null}
-
-        {canViewSuppliers ? (
-          <AccountingSectionCard
-            icon={<Truck className="size-5" />}
-            title="الموردون"
-            description="إدارة الموردين وبيانات التواصل الخاصة بهم."
-            to="/accounting/suppliers"
-            actionLabel="فتح الموردين"
           />
         ) : null}
 

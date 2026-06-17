@@ -17,7 +17,6 @@ import {
   Inbox,
   MapPin,
   Package,
-  Truck,
   UserRound,
   Users,
   Wrench,
@@ -102,18 +101,6 @@ const ReportsPage = lazy(() =>
 );
 const AccountingPage = lazy(() =>
   import("./pages/accounting/list").then((module) => ({ default: module.AccountingPage }))
-);
-const AccountingSuppliersPage = lazy(() =>
-  import("./pages/accounting/suppliers/list").then((module) => ({ default: module.AccountingSuppliersPage }))
-);
-const AccountingSupplierDetailsPage = lazy(() =>
-  import("./pages/accounting/suppliers/show").then((module) => ({ default: module.AccountingSupplierDetailsPage }))
-);
-const AccountingSupplierCreatePage = lazy(() =>
-  import("./pages/accounting/suppliers/create").then((module) => ({ default: module.AccountingSupplierCreatePage }))
-);
-const AccountingSupplierEditPage = lazy(() =>
-  import("./pages/accounting/suppliers/edit").then((module) => ({ default: module.AccountingSupplierEditPage }))
 );
 const AccountingDevicesPage = lazy(() =>
   import("./pages/accounting/devices/list").then((module) => ({ default: module.AccountingDevicesPage }))
@@ -293,19 +280,6 @@ function App() {
                 },
               },
               {
-                name: "accounting-suppliers",
-                list: "/accounting/suppliers",
-                create: "/accounting/suppliers/create",
-                show: "/accounting/suppliers/:id",
-                edit: "/accounting/suppliers/:id/edit",
-                meta: {
-                  label: "الموردون",
-                  icon: <Truck size={16} />,
-                  parent: "accounting",
-                  roles: ["admin", "receptionist", "technician_manager", "maintenance_manager"],
-                },
-              },
-              {
                 name: "accounting-devices",
                 list: "/accounting/devices",
                 create: "/accounting/devices/create",
@@ -389,10 +363,6 @@ function App() {
                   <Route path="accounting/customers/:id" element={<ProtectedAccessRoute resource="accounting-customers"><CustomerDetailsPage /></ProtectedAccessRoute>} />
                   <Route path="accounting/team" element={<ProtectedAccessRoute resource="accounting-team"><TeamPage /></ProtectedAccessRoute>} />
                   <Route path="accounting/team/:id" element={<ProtectedAccessRoute resource="accounting-team"><TeamMemberDetailsPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/suppliers" element={<ProtectedAccessRoute resource="accounting-suppliers"><AccountingSuppliersPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/suppliers/create" element={<ProtectedAccessRoute resource="accounting-suppliers" requiredPermissions={["accounting.suppliers.manage"]}><AccountingSupplierCreatePage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/suppliers/:id" element={<ProtectedAccessRoute resource="accounting-suppliers"><AccountingSupplierDetailsPage /></ProtectedAccessRoute>} />
-                  <Route path="accounting/suppliers/:id/edit" element={<ProtectedAccessRoute resource="accounting-suppliers" requiredPermissions={["accounting.suppliers.manage"]}><AccountingSupplierEditPage /></ProtectedAccessRoute>} />
                   <Route path="accounting/devices" element={<ProtectedAccessRoute resource="accounting-devices"><AccountingDevicesPage /></ProtectedAccessRoute>} />
                   <Route path="accounting/devices/create" element={<ProtectedAccessRoute resource="accounting-devices" requiredPermissions={["accounting.devices.manage"]}><AccountingDeviceCreatePage /></ProtectedAccessRoute>} />
                   <Route path="accounting/devices/:id" element={<ProtectedAccessRoute resource="accounting-devices"><AccountingDeviceDetailsPage /></ProtectedAccessRoute>} />

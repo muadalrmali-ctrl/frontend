@@ -1,24 +1,9 @@
 import { useMemo, useState } from "react";
-import { useList, useNotification } from "@refinedev/core";
+import { useList } from "@refinedev/core";
 import { Link } from "react-router";
-import { Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { hasPermission } from "@/lib/access-control";
-import { apiClient } from "@/providers/api-client";
-import { getStoredUser } from "@/providers/auth-provider";
 
 type Operation = {
   id: number;
@@ -42,12 +27,7 @@ const formatDate = (value?: string | null) =>
   value ? new Intl.DateTimeFormat("ar-LY", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "غير محدد";
 
 export function MaintenanceOperationsPage() {
-  const currentUser = getStoredUser();
-  const canDeleteOperation = hasPermission(currentUser, "delete_maintenance_operation");
-  const { open } = useNotification();
   const [search, setSearch] = useState("");
-  const [operationToDelete, setOperationToDelete] = useState<Operation | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const { result, query } = useList<Operation>({ resource: "maintenance-operations" });
   const operations = result.data ?? [];
 
@@ -68,32 +48,6 @@ export function MaintenanceOperationsPage() {
     );
   }, [operations, search]);
 
-  const deleteOperation = async () => {
-    if (!operationToDelete) return;
-
-    setIsDeleting(true);
-    try {
-      await apiClient(`/api/cases/maintenance-operations/${operationToDelete.id}`, {
-        method: "DELETE",
-      });
-      open?.({
-        type: "success",
-        message: "تم حذف العملية",
-        description: "تم حذف عملية الصيانة من الأرشيف.",
-      });
-      setOperationToDelete(null);
-      await query.refetch();
-    } catch (error) {
-      open?.({
-        type: "error",
-        message: "تعذر حذف العملية",
-        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
-      });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
   return (
     <section className="space-y-6" dir="rtl">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -104,10 +58,10 @@ export function MaintenanceOperationsPage() {
         <Input className="md:w-80" placeholder="ابحث برقم الحالة أو العميل أو الجهاز..." value={search} onChange={(event) => setSearch(event.target.value)} />
       </div>
 
-      {query.isLoading && <p className="text-muted-foreground">جاري تحميل العمليات...</p>}
-      {query.error && <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{query.error.message}</p>}
+      {query.isLoading ? <p className="text-muted-foreground">جاري تحميل العمليات...</p> : null}
+      {query.error ? <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{query.error.message}</p> : null}
 
-      {!query.isLoading && !query.error && (
+      {!query.isLoading && !query.error ? (
         <div className="grid gap-4">
           {filteredOperations.length === 0 ? (
             <p className="rounded-lg border p-4 text-sm text-muted-foreground">لا توجد عمليات مكتملة.</p>
@@ -118,24 +72,7 @@ export function MaintenanceOperationsPage() {
                   <CardHeader className="pb-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <CardTitle>{operation.caseCode}</CardTitle>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={operation.status === "not_repairable" ? "destructive" : "default"}>{statusLabel(operation.status)}</Badge>
-                        {canDeleteOperation ? (
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              setOperationToDelete(operation);
-                            }}
-                          >
-                            <Trash2 className="size-4" />
-                            حذف العملية
-                          </Button>
-                        ) : null}
-                      </div>
+                      <Badge variant={operation.status === "not_repairable" ? "destructive" : "default"}>{statusLabel(operation.status)}</Badge>
                     </div>
                   </CardHeader>
                   <CardContent className="grid gap-3 md:grid-cols-4">
@@ -149,26 +86,16 @@ export function MaintenanceOperationsPage() {
             ))
           )}
         </div>
-      )}
-
-      <AlertDialog open={Boolean(operationToDelete)} onOpenChange={(openState) => !openState && setOperationToDelete(null)}>
-        <AlertDialogContent dir="rtl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>حذف العملية</AlertDialogTitle>
-            <AlertDialogDescription>هل أنت متأكد من حذف عملية الصيانة؟</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>إلغاء</AlertDialogCancel>
-            <AlertDialogAction onClick={deleteOperation} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {isDeleting ? "جاري الحذف..." : "تأكيد الحذف"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      ) : null}
     </section>
   );
 }
 
 function Info({ label, value }: { label: string; value: string }) {
-  return <div><p className="text-xs text-muted-foreground">{label}</p><p className="font-medium">{value}</p></div>;
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="font-medium">{value}</p>
+    </div>
+  );
 }

@@ -72,12 +72,6 @@ const endpoints: Record<string, ResourceEndpoint> = {
     list: "/api/auth/team",
     show: (id) => `/api/auth/team/${id}`,
   },
-  "accounting-suppliers": {
-    list: "/api/accounting/suppliers",
-    show: (id) => `/api/accounting/suppliers/${id}`,
-    create: "/api/accounting/suppliers",
-    update: (id) => `/api/accounting/suppliers/${id}`,
-  },
   "accounting-devices": {
     list: "/api/devices",
     show: (id) => `/api/devices/${id}`,

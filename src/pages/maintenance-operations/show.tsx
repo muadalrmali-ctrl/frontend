@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router";
-import { ArrowRight } from "lucide-react";
+import { useParams, Link, useNavigate } from "react-router";
+import { ArrowRight, Trash2 } from "lucide-react";
+import { useNotification } from "@refinedev/core";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { AttachmentGallery } from "@/components/cases/case-attachments";
 import { hasPermission } from "@/lib/access-control";
 import {
@@ -58,7 +60,10 @@ const toNumber = (value?: string | number | null) => Number(value || 0);
 const formatMoney = (value: number) => `${value.toLocaleString("ar-LY")} د.ل`;
 
 export function MaintenanceOperationDetailsPage() {
+  const navigate = useNavigate();
+  const { open } = useNotification();
   const currentUser = getStoredUser();
+  const canDeleteOperation = hasPermission(currentUser, "delete_maintenance_operation");
   const canViewQualityData = hasPermission(currentUser, "maintenance_operations.quality_saved_data.view");
   const canViewFinalInvoice = hasPermission(currentUser, "maintenance_operations.final_invoice.view");
   const canViewRepairImages = hasPermission(currentUser, "maintenance_operations.after_repair_image.view");
@@ -70,6 +75,8 @@ export function MaintenanceOperationDetailsPage() {
   const [services, setServices] = useState<OperationService[]>([]);
   const [attachments, setAttachments] = useState<CaseAttachment[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -92,6 +99,31 @@ export function MaintenanceOperationDetailsPage() {
   const repairVideos = parseImages(caseData?.postRepairVideos);
   const damagedImages = parseImages(caseData?.postRepairDamagedPartImages);
   const isUnrepaired = caseData?.status === "not_repairable";
+
+  const deleteOperation = async () => {
+    if (!id) return;
+
+    setIsDeleting(true);
+    try {
+      await apiClient(`/api/cases/maintenance-operations/${id}`, {
+        method: "DELETE",
+      });
+      open?.({
+        type: "success",
+        message: "تم حذف العملية",
+        description: "تم حذف عملية الصيانة من الأرشيف.",
+      });
+      navigate("/maintenance-operations");
+    } catch (error) {
+      open?.({
+        type: "error",
+        message: "تعذر حذف العملية",
+        description: error instanceof Error ? error.message : "حدث خطأ غير متوقع",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const mergedAttachments = useMemo(
     () =>
@@ -130,11 +162,19 @@ export function MaintenanceOperationDetailsPage() {
 
       {details ? (
         <>
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-semibold">عملية {caseData.caseCode}</h1>
-            <Badge variant={isUnrepaired ? "destructive" : "default"}>
-              {isUnrepaired ? "لا يمكن إصلاحها" : "تم الإصلاح"}
-            </Badge>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl font-semibold">عملية {caseData.caseCode}</h1>
+              <Badge variant={isUnrepaired ? "destructive" : "default"}>
+                {isUnrepaired ? "لا يمكن إصلاحها" : "تم الإصلاح"}
+              </Badge>
+            </div>
+            {canDeleteOperation ? (
+              <Button type="button" variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
+                <Trash2 className="size-4" />
+                حذف العملية
+              </Button>
+            ) : null}
           </div>
 
           <Card>
@@ -202,6 +242,21 @@ export function MaintenanceOperationDetailsPage() {
           )}
         </>
       ) : null}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف العملية</AlertDialogTitle>
+            <AlertDialogDescription>هل أنت متأكد من حذف عملية الصيانة؟</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteOperation} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isDeleting ? "جارٍ الحذف..." : "تأكيد الحذف"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }
